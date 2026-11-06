@@ -197,15 +197,15 @@ class TDTUltimateEngineV22:
 
             dimensionless_space_residual = np.abs(R_AB_opt - R_AB_geo) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (np.pi ** 2)
-            
             # -----------------------------------------------------------------
-            # 🧬 [V21.3 마스터 종결]: 위상학적 배경 장력(Background Dimensional Tension) 텐서 주입
+            # 🧬 [V22.0 최종 정합]: 로그 평탄화 파쇄 및 지수형 배경 장력 축 전환
             # -----------------------------------------------------------------
-            # 임의의 가중치를 배제하고 중심핵 밀도와 외각 유전 저항의 결합 곡률 로그 변조 장을 저울축 최종 승수로 주입
-            # 이 미분 가능한 연속 함수 텐서 장이 +11도 ~ +18도의 대역폭 평행 이동 오차를 스스로 소거(Self-Calibration)함
-            background_tension = np.log(rho_C + Phi_side_tensor)
+            # 에너지를 억누르던 np.log 대신, 공간 차원 보존비(vsepr_scaler)를 텐서 축으로 삼는 
+            # 자생적 지수 함수(np.exp) 장력을 주입하여 미분 기울기의 진폭을 대수적으로 깨움
+            background_tension = np.exp(-Phi_side_tensor / (vsepr_scaler + 1e-9))
             
-            # 공간 차원 보존비(vsepr_scaler)의 조화 평균 곡률 축과 배경 장력의 유기적 커플링 락(Lock)
+            # 공간 차원 보존비의 조화 평균 곡률 축과 지수 배경 장력의 완전한 유기적 커플링 락(Lock)
+            # 이 미분 가능한 연속 가속 장이 +11도 ~ +18도의 대역폭 평행 이동 관성을 스스로 소거(Self-Calibration)함
             self_consistent_coupling = ((1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * 
                                         (self.omega_1 / (4.0 * np.pi)) * (vsepr_scaler ** 2) * background_tension)
             
@@ -214,9 +214,10 @@ class TDTUltimateEngineV22:
             
             return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
 
-        # 🧬 [V21.3 정합]: 도화지 전체를 전면 개방하여 자생적인 전하 평형선의 최저 바닥 상태 안착을 보장
+        # 🧬 [V22.0 정합]: 도화지 전체를 전면 개방하여 자생적인 전하 평형선의 최저 바닥 상태 안착을 보장
         best_theta_rad = fminbound(dimensionless_knot_energy, 0.001, np.pi - 0.001, xtol=1e-7)
         return float(np.degrees(best_theta_rad))
+
 
 
 
