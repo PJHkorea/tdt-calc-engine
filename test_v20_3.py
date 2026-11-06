@@ -109,7 +109,6 @@ class TDTUltimateEngineV21:
         R_bond = fsolve(equilibrium_residual, initial_guess)
         return float(R_bond[0]), float(a_A_mod), float(a_B_mod)
 
-
     def compute_angle(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0):
         R_A, a_A, _ = self.compute_bond_length(nu_center, nu_side1, nu_b1)
         R_B, a_B, _ = self.compute_bond_length(nu_center, nu_side2, nu_b2)
@@ -155,11 +154,11 @@ class TDTUltimateEngineV21:
         # 공간 차원 보존비 (~0.8968)
         vsepr_scaler = 1.0 - (self.alpha * self.omega_1)  
         
-        # 전체 오버슈트의 다운-클램핑을 위한 진폭 확장 및 리만 제타 사영 분수축 직곱
-        harmonic_amplitude = (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
-        vsepr_shrunk = (harmonic_amplitude * np.sqrt(smooth_lone_pair_density) * 
-                        (self.alpha / (Phi_side_tensor ** vsepr_scaler)) * (self.omega_1 / np.pi))
+        # 🧬 [V21.3 정합]: 사면체 과도 팽창 통제를 위한 VSEPR 진폭 장의 정규 대수 축 일원화
+        harmonic_amplitude = self.alpha * (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
+        vsepr_shrunk = harmonic_amplitude * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
         
+        # 코어의 선형성 밀도 보공역 필터를 곱하여 대칭 결합 정합
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
         
         N_shell, _ = self.compute_automated_shell(nu_center)
@@ -170,9 +169,8 @@ class TDTUltimateEngineV21:
         target_angle = target_angle * (1.0 - shell_3_trigger) + h2s_theoretical_target * shell_3_trigger
 
         def dimensionless_knot_energy(theta):
-            # 하한 경계를 self.alpha * self.omega_1 수론적 상수로 동기화하여 3.8도 트랩 전면 무력화
-            lower_bound = self.alpha * self.omega_1
-            if theta <= lower_bound or theta >= np.pi - 0.001: return 1e9
+            # 🧬 [V21.3 정합]: 인위적 제한 없이 커널 내재화된 파울리 장벽만으로 수리 평형 유도
+            if theta <= 0.001 or theta >= np.pi - 0.001: return 1e9
             
             restoring_term = (theta - target_angle) ** 2
             sin_sq = np.sin(theta)**2
@@ -200,29 +198,17 @@ class TDTUltimateEngineV21:
             dimensionless_space_residual = np.abs(R_AB_opt - R_AB_geo) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (np.pi ** 2)
             
-            # -----------------------------------------------------------------
-            # 🧬 [V21.2 최종 마스터 종결]: 공간 잔차 관성 돌파를 위한 저울축 장력 대수적 증폭
-            # -----------------------------------------------------------------
-            # 13.7도 근처에서 극단적으로 폭발하는 공간 로그 잔차의 복원 인장력을 가볍게 이겨내도록
-            # 우주론적 기초 상수 본연의 입체 장력 비율인 (self.omega_1 / (self.alpha * np.pi)) 축 사영 투영
-            # 이 패치를 통해 SO2/ClO2는 13.7도 고착 벽을 찢어발기며 110도 이상의 진짜 글로벌 웰로 다이렉트 점프
-            gamma_scaler = self.omega_1 / (self.alpha * np.pi)
-            relaxed_coupling_base = gamma_scaler * vsepr_scaler
+            # 🧬 [V21.3 정합]: 상하단 저울 눈금을 우주 차원 보존비 기반의 조화 평균 척도(제1원칙)로 완전 통일
+            self_consistent_coupling = (1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler
             
-            dielectric_coupling_modifier = 1.0 + self.alpha * Phi_C
-            self_consistent_coupling = (relaxed_coupling_base * (rho_C ** (1.0 - vsepr_scaler)) * 
-                                        (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler * dielectric_coupling_modifier)
-            
-            # 파울리 장벽의 국소 압축(sin^4 theta) 및 두께 최적화
+            # 파울리 기하학 장벽의 두께 정형화 완료 (가짜 0도 붕괴 원천 차단)
             pauli_geometrical_barrier = (self.alpha * self.omega_1) / (sin_sq**2 + 1e-9)
             
             return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
 
-        # 솔버의 탐색 하한선을 5.9도(self.alpha * self.omega_1) 이후로 슬라이딩
-        search_lower = self.alpha * self.omega_1
-        best_theta_rad = fminbound(dimensionless_knot_energy, search_lower, np.pi - 0.001, xtol=1e-7)
+        # 🧬 [V21.3 정합]: 도화지 전체를 전면 개방하여 자생적인 전하 평형선의 최저 바닥 상태 안착을 보장
+        best_theta_rad = fminbound(dimensionless_knot_energy, 0.001, np.pi - 0.001, xtol=1e-7)
         return float(np.degrees(best_theta_rad))
-
 
 
 
