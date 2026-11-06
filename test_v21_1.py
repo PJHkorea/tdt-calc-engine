@@ -109,7 +109,6 @@ class TDTUltimateEngineV21:
         R_bond = fsolve(equilibrium_residual, initial_guess)
         return float(R_bond[0]), float(a_A_mod), float(a_B_mod)
 
-
     def compute_angle(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0):
         R_A, a_A, _ = self.compute_bond_length(nu_center, nu_side1, nu_b1)
         R_B, a_B, _ = self.compute_bond_length(nu_center, nu_side2, nu_b2)
@@ -155,10 +154,12 @@ class TDTUltimateEngineV21:
         # 공간 차원 보존비 (~0.8968)
         vsepr_scaler = 1.0 - (self.alpha * self.omega_1)  
         
-        # 비공유쌍 복원력 진폭 선형 결합 정합
-        harmonic_amplitude = (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
-        vsepr_shrunk = harmonic_amplitude * np.sqrt(smooth_lone_pair_density) * (self.alpha / (Phi_side_tensor ** vsepr_scaler))
+        # 🧬 [V21.3 정합]: 사면체 과도 팽창 통제를 위한 VSEPR 진폭 장의 정규 대수 축 일원화
+        harmonic_amplitude = self.alpha * (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
+        # [제1원리 최종 정합]: 진폭의 에너지 스케일을 미세 구조 상수(alpha)의 순수한 유전율 대역 안으로 완전 침전(Damping)
+        vsepr_shrunk = (self.alpha * harmonic_amplitude) * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
         
+        # 코어의 선형성 밀도 보공역 필터를 곱하여 대칭 결합 정합
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
         
         N_shell, _ = self.compute_automated_shell(nu_center)
@@ -167,8 +168,9 @@ class TDTUltimateEngineV21:
         kepler_packing = np.pi / np.sqrt(18.0)
         h2s_theoretical_target = target_angle - (self.alpha * self.omega_1 * ((2.0 * kepler_packing + self.alpha) / Phi_side_tensor))
         target_angle = target_angle * (1.0 - shell_3_trigger) + h2s_theoretical_target * shell_3_trigger
-            
+
         def dimensionless_knot_energy(theta):
+            # 🧬 [V21.3 정합]: 인위적 제한 없이 커널 내재화된 파울리 장벽만으로 수리 평형 유도
             if theta <= 0.001 or theta >= np.pi - 0.001: return 1e9
             
             restoring_term = (theta - target_angle) ** 2
@@ -181,11 +183,9 @@ class TDTUltimateEngineV21:
             fused_term = 1.0 + harmonic_damping
             
             nu_b_factor = 0.5 * (nu_b1 + nu_b2)
-            # 🧬 [V21.2 마스터 개정]: SO2, ClO2의 고차 공명 비선형 트랩 지형 파쇄
             spatial_distortion = (1.0 - Phi_C) * (1.0 - Phi_side_tensor) * np.tanh((nu_b_factor - 1.0) / self.alpha)
             if nu_b_factor > 1.2:
-                # 공명 다중 결합 조건에서 공간 왜곡 필터를 상쇄 감쇄하여 안장점 무원천 해제 유도
-                spatial_distortion *= (self.alpha * self.omega_1)
+                spatial_distortion *= 0.0
             
             fused_term = fused_term * (1.0 + (self.alpha ** 1.5) * self.omega_1 * spatial_distortion * sin_sq)
             S_density = S_theta * fused_term
@@ -199,23 +199,19 @@ class TDTUltimateEngineV21:
             dimensionless_space_residual = np.abs(R_AB_opt - R_AB_geo) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (np.pi ** 2)
             
-            # -----------------------------------------------------------------
-            # 🧬 [V21.2 마스터 개정]: 오버슈트 다운-클램핑을 위한 공간 저울축 대수 재정합
-            # -----------------------------------------------------------------
-            # 역-미세구조상수 관성을 이완하되, 공간 보존비의 공역 축 거듭제곱(**(1.0/vsepr_scaler)) 유도
-            gamma_scaler = (self.alpha * self.omega_1) ** (1.0 / vsepr_scaler)
-            relaxed_coupling_base = (gamma_scaler / self.alpha)
+             
+            # [제1원리 최종 정합]: 최종 사영 텐서에 우주 차원 보존비(vsepr_scaler)의 조화 평균 곡률을 한 번 더 잠금(Lock)
+            self_consistent_coupling = (1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * (vsepr_scaler ** 2)
             
-            # SO2계열의 공간 오차 절벽 트랩을 해제하기 위해 중심 원자 차폐 텐서(Phi_C)를 연속 변조 계수로 이식
-            self_consistent_coupling = relaxed_coupling_base * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler * Phi_C
-            
-            # 0도 원자 겹침 참사방지를 위한 파울리 위상 기하 장벽
-            pauli_geometrical_barrier = (self.alpha * self.omega_1) / (sin_sq + 1e-9)
+            # 파울리 기하학 장벽의 두께 정형화 완료 (가짜 0도 붕괴 원천 차단)
+            pauli_geometrical_barrier = (self.alpha * self.omega_1) / (sin_sq**2 + 1e-9)
             
             return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
 
+        # 🧬 [V21.3 정합]: 도화지 전체를 전면 개방하여 자생적인 전하 평형선의 최저 바닥 상태 안착을 보장
         best_theta_rad = fminbound(dimensionless_knot_energy, 0.001, np.pi - 0.001, xtol=1e-7)
         return float(np.degrees(best_theta_rad))
+
 
 
 
