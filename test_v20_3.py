@@ -1,13 +1,12 @@
 import numpy as np
 from scipy.optimize import fsolve, fminbound
 
-class TDTUltimateEngineV22:
+class TDTUltimateEngineV21:
     def __init__(self):
         # [제1원칙 수론적 고정 불변량]
         self.a0 = 0.5291772109       # 보어 반경 (Å)
         self.omega_1 = 14.1347251417  # 리만 제타 제1 비자명 영점
         self.alpha = 0.0072973525     # 바리온 미세 구조 상수
-
 
     def compute_automated_shell(self, nu_core):
         delta = self.alpha * self.omega_1
@@ -33,6 +32,7 @@ class TDTUltimateEngineV22:
         rho_C = dim_4_invariant * kepler_packing * (1.0 + self.alpha * zeta_density)
         return rho_C, a_C, zeta_density
 
+
     def compute_bond_length(self, nu_A, nu_B, nu_bond=1.0):
         rho_A, a_A, delta_zeta_A = self.compute_topological_density(nu_A)
         rho_B, a_B, delta_zeta_B = self.compute_topological_density(nu_B)
@@ -44,11 +44,11 @@ class TDTUltimateEngineV22:
         density_asymmetry = np.abs(rho_A - rho_B) / (rho_A + rho_B) if (rho_A + rho_B) > 0 else 0
         scale_invariant = np.tanh(rho_A * rho_B)
         
-        # [V21.3 최종 척도 정합]: 이온성 곡률 평형 장 수식화
+        # [V21.2 최종 척도 정합]: 이온성 곡률 평형 장 수식화
         ionic_field_modifier = (self.alpha * (self.omega_1 ** 0.5) * density_asymmetry * scale_invariant)
         ionic_contraction = (1.0 - ionic_field_modifier) / (1.0 + self.alpha * asymmetry_factor)
         
-        # [V21.3 혁신]: 혼합 유전 장 척도 일원화 및 자중 정규화 바인딩
+        # [V21.2 혁신]: 혼합 유전 장 척도 일원화
         geometric_ionic_limit = 1.0 + (self.alpha * (self.omega_1 / np.pi))
         universal_ionic_scale = 1.0 + (geometric_ionic_limit - 1.0) * np.tanh(density_asymmetry / self.alpha)
         chi_tensor *= (ionic_contraction * universal_ionic_scale)
@@ -56,16 +56,17 @@ class TDTUltimateEngineV22:
         Phi_A = 1.0 - (a_A / self.a0) if nu_A > 1 else 1.0
         Phi_B = 1.0 - (a_B / self.a0) if nu_B > 1 else 1.0
         
-        # 삼중 결합 과압축 해제를 위한 척도 재정합
+        # 🧬 [V21.2 마스터 개정]: 삼중 결합 과압축(CO, N2 파국) 해제를 위한 척도 재정합
         bond_scale = 1.0 / (1.0 + self.alpha * self.omega_1 * (nu_bond - 1.0))
         if nu_bond > 1.5: 
+            # 임의의 과압축 패킹 인자 직곱 대신, 수론적 상수의 대수 유전 조합으로 감쇄 곡률 정규화
             bond_scale *= (1.0 - self.alpha * (self.omega_1 / np.pi))
         
         shielding_factor = (self.alpha * self.omega_1) / (2.0 * np.pi)
         mod_A = (1.0 + (self.alpha * nu_bond) - (shielding_factor * (nu_A - 1.0) * Phi_A)) * bond_scale
         mod_B = (1.0 + (self.alpha * nu_bond) - (shielding_factor * (nu_B - 1.0) * Phi_B)) * bond_scale
         
-        # 수소화물(Hydride) 격자 이완의 파국적 수축 해제
+        # 수소화물(Hydride) 격자 이완의 파국적 수축(LiH 에러) 해제
         if (nu_A == 1 or nu_B == 1) and (nu_A > 1 or nu_B > 1):
             max_nu = max(nu_A, nu_B)
             N_max, _ = self.compute_automated_shell(max_nu)
@@ -73,7 +74,7 @@ class TDTUltimateEngineV22:
             mod_A *= hydride_expansion
             mod_B *= hydride_expansion
 
-        # 중원소 d-오비탈 연속 차폐 계수의 하드코딩 제거 완료
+        # 중원소 d-오비탈 연속 차폐 계수의 하드코딩(0.0115) 제거
         if nu_A >= 17 or nu_B >= 17:
             max_nu = max(nu_A, nu_B)
             universal_d_shield = self.alpha / self.omega_1
@@ -155,8 +156,7 @@ class TDTUltimateEngineV22:
         
         # 🧬 [V21.3 정합]: 사면체 과도 팽창 통제를 위한 VSEPR 진폭 장의 정규 대수 축 일원화
         harmonic_amplitude = self.alpha * (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
-        # [제1원리 최종 정합]: 진폭의 에너지 스케일을 미세 구조 상수(alpha)의 순수한 유전율 대역 안으로 완전 침전(Damping)
-        vsepr_shrunk = (self.alpha * harmonic_amplitude) * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
+        vsepr_shrunk = harmonic_amplitude * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
         
         # 코어의 선형성 밀도 보공역 필터를 곱하여 대칭 결합 정합
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
@@ -197,28 +197,18 @@ class TDTUltimateEngineV22:
 
             dimensionless_space_residual = np.abs(R_AB_opt - R_AB_geo) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (np.pi ** 2)
-            # -----------------------------------------------------------------
-            # 🧬 [V22.0 최종 정합]: 로그 평탄화 파쇄 및 지수형 배경 장력 축 전환
-            # -----------------------------------------------------------------
-            # 에너지를 억누르던 np.log 대신, 공간 차원 보존비(vsepr_scaler)를 텐서 축으로 삼는 
-            # 자생적 지수 함수(np.exp) 장력을 주입하여 미분 기울기의 진폭을 대수적으로 깨움
-            background_tension = np.exp(-Phi_side_tensor / (vsepr_scaler + 1e-9))
             
-            # 공간 차원 보존비의 조화 평균 곡률 축과 지수 배경 장력의 완전한 유기적 커플링 락(Lock)
-            # 이 미분 가능한 연속 가속 장이 +11도 ~ +18도의 대역폭 평행 이동 관성을 스스로 소거(Self-Calibration)함
-            self_consistent_coupling = ((1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * 
-                                        (self.omega_1 / (4.0 * np.pi)) * (vsepr_scaler ** 2) * background_tension)
+            # 🧬 [V21.3 정합]: 상하단 저울 눈금을 우주 차원 보존비 기반의 조화 평균 척도(제1원칙)로 완전 통일
+            self_consistent_coupling = (1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler
             
             # 파울리 기하학 장벽의 두께 정형화 완료 (가짜 0도 붕괴 원천 차단)
             pauli_geometrical_barrier = (self.alpha * self.omega_1) / (sin_sq**2 + 1e-9)
             
             return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
 
-        # 🧬 [V22.0 정합]: 도화지 전체를 전면 개방하여 자생적인 전하 평형선의 최저 바닥 상태 안착을 보장
+        # 🧬 [V21.3 정합]: 도화지 전체를 전면 개방하여 자생적인 전하 평형선의 최저 바닥 상태 안착을 보장
         best_theta_rad = fminbound(dimensionless_knot_energy, 0.001, np.pi - 0.001, xtol=1e-7)
         return float(np.degrees(best_theta_rad))
-
-
 
 
 
@@ -228,9 +218,9 @@ class TDTUltimateEngineV22:
 # =====================================================================
 if __name__ == "__main__":
     # 클래스 명칭 및 인스턴스 축 동기화
-    engine = TDTUltimateEngineV22()
+    engine = TDTUltimateEngineV21()
     print("═" * 80)
-    print(" TDTUltimateEngineV22 ")
+    print(" TDTUltimateEngineV21.2 [순수 조화 장 통합 및 안장점 해제] 마스터 교차 검증")
     print("═" * 80)
     
     print("\n [1] 결합 길이 (Bond Length) 측정 스펙트럼 (총 10개 케이스)")
