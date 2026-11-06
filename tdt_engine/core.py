@@ -134,3 +134,45 @@ class TDTEngineCore(AbstractPredictor):
         initial_guess = a_A_mod + a_B_mod
         R_bond = fsolve(equilibrium_residual, initial_guess)
         return float(R_bond[0]), float(a_A_mod), float(a_B_mod)
+
+
+
+# =====================================================================
+# 🧪 [임시 검증] TDTEngineCore 순수 수식 예측력 확인용 테스트 메인
+#    (확인 후 이 라인 밑으로 전체 삭제하시면 됩니다)
+# =====================================================================
+if __name__ == "__main__":
+    # 1. 코어 엔진 인스턴스화
+    core_engine = TDTEngineCore()
+    
+    print("═" * 80)
+    print(" [TEMP TEST] TDTEngineCore Raw Formula Verification")
+    print("═" * 80)
+    print(" - 목적: 보정 레이어(Calibration) 거치기 전 순수 수식 고유의 오차 검증")
+    print("-" * 80)
+    
+    # 2. 핵심 레퍼런스 테스트 케이스 5종 (분자명, Z_A, Z_B, 결합차수, 관측값)
+    test_cases = [
+        ("H2",  1,  1, 1.0, 0.7414),
+        ("HF",  1,  9, 1.0, 0.9168),
+        ("HCl", 1, 17, 1.0, 1.2746),
+        ("LiF", 3,  9, 1.0, 1.5639),
+        ("CO",  6,  8, 2.0, 1.1283)
+    ]
+    
+    # 3. 루프 수행 및 결과 출력
+    for name, z_A, z_B, nu_b, obs in test_cases:
+        try:
+            # 코어 연산 수행 (추상 인터페이스 규격 호출)
+            calc_R, a_A_mod, a_B_mod = core_engine.compute_bond_length(z_A, z_B, nu_b)
+            error = calc_R - obs
+            
+            print(f" 🧪 {name:5s} | Raw Calc: {calc_R:.4f} Å | Obs: {obs:.4f} Å | Error: {error:+.4f} Å")
+            # 디버깅용 유전 변형 반지름 로그 출력
+            print(f"         └─ [Debug Info] a_A_mod: {a_A_mod:.4f} | a_B_mod: {a_B_mod:.4f}")
+            
+        except Exception as e:
+            print(f" ❌ {name:5s} | 수치해석 솔버 수렴 실패 혹은 런타임 에러: {e}")
+            
+    print("═" * 80)
+
