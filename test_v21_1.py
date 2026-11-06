@@ -149,10 +149,13 @@ class TDTUltimateEngineV21:
         # 공간 곡률 스케일러의 우주 상수형 대수 정합 정의
         vsepr_scaler = 1.0 - (self.alpha * self.omega_1)  # 공간 차원 보존비 (~0.8968)
         
-        # 🧬 [V21.2 척도 대개정]: 사면체 고착 패러다임을 깨부수기 위한 alpha 선형 결합 축 정상화
-        # 기존 과감쇄되었던 관성 지수(alpha ** 1.15)를 미세구조상수와 리만 영점의 범용 선형 제어 조합으로 전면 치환
-        alpha_linear_coupling = self.alpha * (1.0 + self.alpha * self.omega_1)
-        vsepr_shrunk = (self.alpha ** alpha_linear_coupling) * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
+        # -----------------------------------------------------------------
+        # 🧬 [V21.2 척도 정공법 대통합]: 사면체 고착 파쇄를 위한 유전율 진폭 개정
+        # -----------------------------------------------------------------
+        # NameError가 발생한 asymmetry_factor 대신, 3체 전기음성도 비대칭 인자인 electronegativity_asymmetry를 주입
+        harmonic_amplitude = self.alpha * (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
+        vsepr_shrunk = (self.alpha ** harmonic_amplitude) * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
+
         
         # 🧬 [V21.2 교정]: bifurcation_score(코어의 선형성 밀도)의 보공역 필터(1.0 - score)를 곱하여 정합
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
@@ -175,7 +178,7 @@ class TDTUltimateEngineV21:
             # 우주론적 간섭 필터 공간 복원
             S_theta = sin_sq * np.exp(-(self.alpha * self.omega_1 * (nu_b1 + nu_b2)) / (1.0 + cos_sq))
             
-            # 🧬 [V21.2 교정]: omega_1의 거대한 간섭 진폭 자체를 미세 구조 상수 단위 내부로 격리 평탄화
+            # 🧬 [V21.2 교정]: 지형을 평탄화하면서도 미분 기울기를 가두지 않도록 조화 감쇄 스케일 동기화
             harmonic_damping = self.alpha * (np.cos(5.0 * theta) + (self.alpha * self.omega_1) * np.cos(6.0 * theta))
             fused_term = 1.0 + harmonic_damping
             
@@ -183,7 +186,7 @@ class TDTUltimateEngineV21:
             nu_b_factor = 0.5 * (nu_b1 + nu_b2)
             spatial_distortion = (1.0 - Phi_C) * (1.0 - Phi_side_tensor) * np.tanh((nu_b_factor - 1.0) / self.alpha)
             
-            # 🧬 [V21.2 교정]: 0도 겹침 특이점의 블랙홀 폭발력을 정밀하게 평탄화하기 위해 바닥 곡률 상쇄
+            # 0도 겹침 특이점 주변 지형을 부드러운 다항 함수형 곡률 매핑으로 평탄화
             fused_term = fused_term * (1.0 + (self.alpha ** 1.5) * self.omega_1 * spatial_distortion * sin_sq)
             S_density = S_theta * fused_term
             
@@ -194,18 +197,16 @@ class TDTUltimateEngineV21:
             R_AB_opt = (a_A + a_B) * (1.0 + (1.0 - S_density) * (self.omega_1 / np.pi) * Phi_C)
             R_AB_geo = np.sqrt(np.abs((R_A**2) + (R_B**2) - 2.0 * R_A * R_B * np.cos(theta)))
 
-            # 손실 함수의 대수 공간 동기화
+            # 손실 함수의 대수 공간 동기화 및 3D 사영축 완전 정합
             dimensionless_space_residual = np.abs(np.log(R_AB_opt) - np.log(R_AB_geo)) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (np.pi ** 2)
             
             # 최하단 저울 축 차원학적 3차원 입체 공간 보존비 최종 승수 완벽 락(Lock)
             self_consistent_coupling = (1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler
             
-            # 🧬 [V21.2 마스터 피스]: 0도 및 0.0573도 수치 잔차 데드락 격파를 위한 진공 탄성 복원 항 주입
-            # 솔버 초입부의 기울기를 활성화하여 새들 포인트를 탈출시키는 탄성 곡률을 바닥 면에 연속 누적
-            vacuum_elastic_push = (self.alpha * self.omega_1) / (2.0 * np.pi * (sin_sq + self.alpha)) * (1.0 - bifurcation_score)
-            
-            return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + vacuum_elastic_push
+            # 🧬 [V21.2 최종 롤백 선언]: 인위적인 외부 보정 push 항을 완벽하게 제거 (0.0)
+            # 오직 상단 커널의 harmonic_amplitude에서 확장된 미분 복원력 자체로 안장점을 탈출 유도
+            return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling
 
         # 솔버의 검색 정밀도를 1e-7로 촘촘히 고정하여 순수 물리적 평형점의 곡률 최저점으로 안착 유도
         best_theta_rad = fminbound(dimensionless_knot_energy, 0.001, np.pi - 0.001, xtol=1e-7)
@@ -214,33 +215,32 @@ class TDTUltimateEngineV21:
 
 
 
-
-
 # =====================================================================
-# 🧪 TDT Ultimate Engine V20.3 Fix [15대 핵심/특이점 케이스] 통합 검증 시스템
+# 🧪 TDT Ultimate Engine V21.2 최종 마스터 [15대 특이점 케이스] 통합 검증 시스템
 # =====================================================================
 if __name__ == "__main__":
+    # 클래스 명칭 및 인스턴스 축 동기화
     engine = TDTUltimateEngineV21()
     print("═" * 80)
-    print(" TDTUltimateEngineV21 [기하학적 상전이 및 특이점 패치] 통합 교차 검증")
+    print(" TDTUltimateEngineV21.2 [순수 조화 장 통합 및 안장점 해제] 마스터 교차 검증")
     print("═" * 80)
     
     print("\n [1] 결합 길이 (Bond Length) 측정 스펙트럼 (총 10개 케이스)")
     print("-" * 80)
     cases_length = [
-        # 분자명, 원자A, 원자B, 결합차수, 실제관측값(Å)
-        # -- 기존 핵심 레퍼런스 5종 --
+        # 분자명, 원자A, 원자B, 결합차수(nu_bond), 실제관측값(Å)
+        # -- 핵심 레퍼런스 물질 5종 --
         ("H2",   1,  1, 1.0, 0.7414), 
         ("HF",   1,  9, 1.0, 0.9168), 
         ("HCl",  1, 17, 1.0, 1.2746),
         ("LiF",  3,  9, 1.0, 1.5639), 
         ("CO",   6,  8, 2.0, 1.1283),
-        # -- 신규 확장/특이점 스트레스 테스트 5종 --
+        # -- 확장 및 극한 특이점 스트레스 테스트 물질 5종 --
         ("N2",   7,  7, 3.0, 1.0977),  # 강력한 삼중결합
-        ("NaF", 11,  9, 1.0, 1.9260),  # 3주기 이온결합 전이
-        ("F2",   9,  9, 1.0, 1.4119),  # 단일 호모 결합 밀도
+        ("NaF", 11,  9, 1.0, 1.9260),  # 3주기 이온성 전이 계
+        ("F2",   9,  9, 1.0, 1.4119),  # 호모핵 단일 결합 밀도 자중
         ("BF",   5,  9, 1.3, 1.2626),  # 다중성 이종 공유결합
-        ("LiH",  3,  1, 1.0, 1.5959)   # [특이점 1] 수소화물 격자 팽창 계
+        ("LiH",  3,  1, 1.0, 1.5959)   # 경원소 전하 역전 격자 이완 계
     ]
     
     for name, z_A, z_B, nu_b, obs in cases_length:
@@ -250,27 +250,26 @@ if __name__ == "__main__":
     print("\n [2] 결합 각도 (Bond Angle) 상전이 스펙트럼 (총 10개 케이스)")
     print("-" * 80)
     cases_angle = [
-        # 분자명, 중심원소, 외각1, 외각2, 실제관측값(°)
-        # -- 기존 핵심 레퍼런스 5종 --
-        ("CO2",  6,  8,  8, 180.00), 
-        ("CH4",  6,  1,  1, 109.47), 
-        ("H2O",  8,  1,  1, 104.50),
-        ("NH3",  7,  1,  1, 106.70), 
-        ("H2S", 16,  1,  1,  92.11),
-        # -- 신규 확장/특이점 스트레스 테스트 5종 --
-        ("PH3", 15,  1,  1,  93.50),  # 3주기 중심 수소화물
-        ("NF3",  7,  9,  9, 102.30),  # [특이점 2] 불소 유전 블랙홀 계
-        ("OF2",  8,  9,  9, 103.30),  # [특이점 2] 역전 유전 밀도 계
-        ("SO2", 16,  8,  8, 119.30),  # [특이점 3] 다중 결합 새들포인트 락 계 (nu_b=1.5 자동)
-        ("ClO2",17,  8,  8, 111.00)   # [특이점 3] 중원소 다중 결합 락 계 (nu_b=1.5 자동)
+        # 분자명, 중심원소, 외각1, 외각2, 결합선 차수1, 결합선 차수2, 실제관측값(°)
+        # -- 핵심 레퍼런스 물질 5종 --
+        ("CO2",  6,  8,  8, 2.0, 2.0, 180.00), # 다중 결합 텐서 직결
+        ("CH4",  6,  1,  1, 1.0, 1.0, 109.47), 
+        ("H2O",  8,  1,  1, 1.0, 1.0, 104.50),
+        ("NH3",  7,  1,  1, 1.0, 1.0, 106.70), 
+        ("H2S", 16,  1,  1, 1.0, 1.0,  92.11),
+        # -- 확장 및 극한 특이점 스트레스 테스트 물질 5종 --
+        ("PH3", 15,  1,  1, 1.0, 1.0,  93.50),  # 3주기 수소화물
+        ("NF3",  7,  9,  9, 1.0, 1.0, 102.30),  # 유전 블랙홀 완화 계
+        ("OF2",  8,  9,  9, 1.0, 1.0, 103.30),  # 역전 유전 밀도 곡률 계
+        ("SO2", 16,  8,  8, 1.5, 1.5, 119.30),  # 고차 공명 다중결합 (연속 인자 다이렉트 주입)
+        ("ClO2",17,  8,  8, 1.5, 1.5, 111.00)   # 고차 공명 다중결합 (연속 인자 다이렉트 주입)
     ]
     
-    # SO2와 ClO2는 결합 차수(nu_bond)가 1.5이므로 다중 결합 전이 연산을 위해 인자 주입을 명시적으로 처리
-    for name, z_C, z_S1, z_S2, obs in cases_angle:
-        if name in ["SO2", "ClO2"]:
-            calc = engine.compute_angle(z_C, z_S1, z_S2, nu_b1=1.5, nu_b2=1.5)
-        else:
-            calc = engine.compute_angle(z_C, z_S1, z_S2)
+    # 🧬 [V21.2 마감]: 인위적인 조건문 분기(if name == ...)를 철저히 박멸
+    # 모든 다중결합 및 단일결합의 차수 인자(nu_b1, nu_b2)를 튜플 아키텍처 자체에서 다이렉트로 전사 사영
+    for name, z_C, z_S1, z_S2, nb1, nu_b2, obs in cases_angle:
+        calc = engine.compute_angle(z_C, z_S1, z_S2, nu_b1=nb1, nu_b2=nu_b2)
         print(f" - {name:5s} | Calc: {calc:.4f}° | Obs: {obs:.4f}° | Error: {calc-obs:+.4f}°")
         
     print("═" * 80)
+
