@@ -185,7 +185,7 @@ class TDTUltimateEngineV20_1_Fix:
 if __name__ == "__main__":
     engine = TDTUltimateEngineV20_1_Fix()
     print("═" * 75)
-    print(" TDTUltimateEngineV20.1 Fix [상하단 대수 정합 동기화] 그랜드슬램 검증")
+    print(" TDTUltimateEngineV20.2 Fix [상하단 대수 정합 동기화] 그랜드슬램 검증")
     print("═" * 75)
     
     print("\n 결합 길이 (Bond Length) 측정")
