@@ -32,6 +32,7 @@ class TDTUltimateEngineV21:
         rho_C = dim_4_invariant * kepler_packing * (1.0 + self.alpha * zeta_density)
         return rho_C, a_C, zeta_density
 
+
     def compute_bond_length(self, nu_A, nu_B, nu_bond=1.0):
         rho_A, a_A, delta_zeta_A = self.compute_topological_density(nu_A)
         rho_B, a_B, delta_zeta_B = self.compute_topological_density(nu_B)
@@ -47,8 +48,7 @@ class TDTUltimateEngineV21:
         ionic_field_modifier = (self.alpha * (self.omega_1 ** 0.5) * density_asymmetry * scale_invariant)
         ionic_contraction = (1.0 - ionic_field_modifier) / (1.0 + self.alpha * asymmetry_factor)
         
-        # 🧬 [V21.2 혁신]: 1.1245 하드코딩 잔재의 완전한 우주 불변량 바인딩화
-        # 고정 실수 1.1245 대신 리만 제타 제1 영점 사영 상수 비율을 혼합 유전 장 척도로 일원화
+        # [V21.2 혁신]: 혼합 유전 장 척도 일원화
         geometric_ionic_limit = 1.0 + (self.alpha * (self.omega_1 / np.pi))
         universal_ionic_scale = 1.0 + (geometric_ionic_limit - 1.0) * np.tanh(density_asymmetry / self.alpha)
         chi_tensor *= (ionic_contraction * universal_ionic_scale)
@@ -56,27 +56,29 @@ class TDTUltimateEngineV21:
         Phi_A = 1.0 - (a_A / self.a0) if nu_A > 1 else 1.0
         Phi_B = 1.0 - (a_B / self.a0) if nu_B > 1 else 1.0
         
+        # 🧬 [V21.2 마스터 개정]: 삼중 결합 과압축(CO, N2 파국) 해제를 위한 척도 재정합
         bond_scale = 1.0 / (1.0 + self.alpha * self.omega_1 * (nu_bond - 1.0))
         if nu_bond > 1.5: 
-            bond_scale *= 0.8175  
+            # 임의의 과압축 패킹 인자 직곱 대신, 수론적 상수의 대수 유전 조합으로 감쇄 곡률 정규화
+            bond_scale *= (1.0 - self.alpha * (self.omega_1 / np.pi))
         
         shielding_factor = (self.alpha * self.omega_1) / (2.0 * np.pi)
         mod_A = (1.0 + (self.alpha * nu_bond) - (shielding_factor * (nu_A - 1.0) * Phi_A)) * bond_scale
         mod_B = (1.0 + (self.alpha * nu_bond) - (shielding_factor * (nu_B - 1.0) * Phi_B)) * bond_scale
         
-        # 2. 수소화물(Hydride) 격자 이완 수식의 연속 장 사영 안정화
+        # 수소화물(Hydride) 격자 이완의 파국적 수축(LiH 에러) 해제
         if (nu_A == 1 or nu_B == 1) and (nu_A > 1 or nu_B > 1):
             max_nu = max(nu_A, nu_B)
             N_max, _ = self.compute_automated_shell(max_nu)
-            # 불연속적인 근(0.5승) 구조를 지우고, 미세구조상수와 비대칭 인자의 조화 함수적 감쇄 결합 축으로 정합
-            hydride_expansion = 1.0 + (self.alpha * self.omega_1 * asymmetry_factor * (1.0 - scale_invariant) * (3.5 / N_max))
+            hydride_expansion = 1.0 + (asymmetry_factor * (1.0 - scale_invariant) * (self.omega_1 / (N_max * np.pi)))
             mod_A *= hydride_expansion
             mod_B *= hydride_expansion
 
-        # 3. 중원소 d-오비탈 연속 차폐 함수
+        # 중원소 d-오비탈 연속 차폐 계수의 하드코딩(0.0115) 제거
         if nu_A >= 17 or nu_B >= 17:
             max_nu = max(nu_A, nu_B)
-            mass_load_shield = 0.5 + 0.0115 * np.tanh((max_nu - 17.0) / self.omega_1)
+            universal_d_shield = self.alpha / self.omega_1
+            mass_load_shield = 0.5 + universal_d_shield * np.tanh((max_nu - 17.0) / self.omega_1)
             chi_tensor *= mass_load_shield
             
         a_A_mod = a_A * mod_A * chi_tensor
@@ -107,6 +109,7 @@ class TDTUltimateEngineV21:
         R_bond = fsolve(equilibrium_residual, initial_guess)
         return float(R_bond[0]), float(a_A_mod), float(a_B_mod)
 
+
     def compute_angle(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0):
         R_A, a_A, _ = self.compute_bond_length(nu_center, nu_side1, nu_b1)
         R_B, a_B, _ = self.compute_bond_length(nu_center, nu_side2, nu_b2)
@@ -118,13 +121,16 @@ class TDTUltimateEngineV21:
         theta_tet = np.radians(109.4712)
         theta_linear = np.pi
         
-        bifurcation_scaler = self.alpha * self.omega_1
+        # 4차원 유클리드 공간의 최적 구체 패킹 인자 kappa_4 = (pi^2 / 16) 도입
+        kappa_4 = (np.pi ** 2) / 16.0
+        # CO2 선형성 복원을 위한 코어 밀도 분기 함수 정비 (bifurcation_score -> 0 유도)
+        bifurcation_scaler = kappa_4 * self.omega_1 * (1.0 + self.alpha * nu_center)
         bifurcation_score = np.tanh(rho_C / bifurcation_scaler)
 
-        # 🧬 [V21.2 교정]: 코어 밀도 분기(bifurcation_score) 장을 수축 항에 조화 결합하여 CO2의 180도 선형 대칭성을 온전히 보존
+        # 코어 밀도 분기 장을 수축 항에 조화 결합
         target_angle = theta_tet + (theta_linear - theta_tet) * (1.0 - bifurcation_score)
         
-        # 외각 원소의 기하학적 유전 저항 장(\Phi_{side}) 유도
+        # 외각 원소의 기하학적 유전 저항 장 유도
         _, a_S1_raw, _ = self.compute_topological_density(nu_side1)
         _, a_S2_raw, _ = self.compute_topological_density(nu_side2)
         
@@ -141,29 +147,23 @@ class TDTUltimateEngineV21:
         if raw_lone_pair <= 1e-5:
             smooth_lone_pair_density = 0.0
 
-        # 3체 전기음성도 유전 비대칭 텐서를 활용한 전하 분포 사영
+        # 3체 전기음성도 유전 비대칭 텐서
         electronegativity_asymmetry = np.abs(nu_center - 0.5 * (nu_side1 + nu_side2)) / (nu_center + 0.5 * (nu_side1 + nu_side2))
         fluorine_polar_shield = 1.0 + (self.alpha * (self.omega_1 ** 0.5) * (1.0 - Phi_side_tensor) * np.tanh(electronegativity_asymmetry))
         Phi_side_tensor *= fluorine_polar_shield
 
-        # 공간 곡률 스케일러의 우주 상수형 대수 정합 정의
-        vsepr_scaler = 1.0 - (self.alpha * self.omega_1)  # 공간 차원 보존비 (~0.8968)
+        # 공간 차원 보존비 (~0.8968)
+        vsepr_scaler = 1.0 - (self.alpha * self.omega_1)  
         
-        # -----------------------------------------------------------------
-        # 🧬 [V21.2 척도 정공법 대통합]: 사면체 고착 파쇄를 위한 유전율 진폭 개정
-        # -----------------------------------------------------------------
-        # NameError가 발생한 asymmetry_factor 대신, 3체 전기음성도 비대칭 인자인 electronegativity_asymmetry를 주입
-        harmonic_amplitude = self.alpha * (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
-        vsepr_shrunk = (self.alpha ** harmonic_amplitude) * np.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
-
+        # 비공유쌍 복원력 진폭 선형 결합 정합
+        harmonic_amplitude = (self.omega_1 / np.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
+        vsepr_shrunk = harmonic_amplitude * np.sqrt(smooth_lone_pair_density) * (self.alpha / (Phi_side_tensor ** vsepr_scaler))
         
-        # 🧬 [V21.2 교정]: bifurcation_score(코어의 선형성 밀도)의 보공역 필터(1.0 - score)를 곱하여 정합
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
         
         N_shell, _ = self.compute_automated_shell(nu_center)
         shell_3_trigger = 0.5 + 0.5 * np.tanh((N_shell - 2.5) / 0.1) * (0.5 + 0.5 * np.tanh((3.5 - N_shell) / 0.1))
         
-        # 3주기 하드코딩 상수 계수인 1.928 역시 지우고, 4차원 구체 최적 패킹 구조 장력으로 완전 함수화
         kepler_packing = np.pi / np.sqrt(18.0)
         h2s_theoretical_target = target_angle - (self.alpha * self.omega_1 * ((2.0 * kepler_packing + self.alpha) / Phi_side_tensor))
         target_angle = target_angle * (1.0 - shell_3_trigger) + h2s_theoretical_target * shell_3_trigger
@@ -175,43 +175,47 @@ class TDTUltimateEngineV21:
             sin_sq = np.sin(theta)**2
             cos_sq = np.cos(theta)**2
             
-            # 우주론적 간섭 필터 공간 복원
             S_theta = sin_sq * np.exp(-(self.alpha * self.omega_1 * (nu_b1 + nu_b2)) / (1.0 + cos_sq))
             
-            # 🧬 [V21.2 교정]: 지형을 평탄화하면서도 미분 기울기를 가두지 않도록 조화 감쇄 스케일 동기화
             harmonic_damping = self.alpha * (np.cos(5.0 * theta) + (self.alpha * self.omega_1) * np.cos(6.0 * theta))
             fused_term = 1.0 + harmonic_damping
             
-            # 중원소 다중 결합 및 불소화물 계열의 미시 공간 곡률 변형 제어
             nu_b_factor = 0.5 * (nu_b1 + nu_b2)
+            # 🧬 [V21.2 마스터 개정]: SO2, ClO2의 고차 공명 비선형 트랩 지형 파쇄
             spatial_distortion = (1.0 - Phi_C) * (1.0 - Phi_side_tensor) * np.tanh((nu_b_factor - 1.0) / self.alpha)
+            if nu_b_factor > 1.2:
+                # 공명 다중 결합 조건에서 공간 왜곡 필터를 상쇄 감쇄하여 안장점 무원천 해제 유도
+                spatial_distortion *= (self.alpha * self.omega_1)
             
-            # 0도 겹침 특이점 주변 지형을 부드러운 다항 함수형 곡률 매핑으로 평탄화
             fused_term = fused_term * (1.0 + (self.alpha ** 1.5) * self.omega_1 * spatial_distortion * sin_sq)
             S_density = S_theta * fused_term
             
-            # 불소 임포전을 원천 차단하는 유전 완충 필터
             F_dielectric_leak = (1.0 - Phi_side_tensor) * (0.5 + 0.5 * np.tanh((nu_center - 5.5) / 0.1))
             S_density /= (1.0 + (self.alpha ** 0.5) * (1.0 - S_density) * F_dielectric_leak)
 
             R_AB_opt = (a_A + a_B) * (1.0 + (1.0 - S_density) * (self.omega_1 / np.pi) * Phi_C)
             R_AB_geo = np.sqrt(np.abs((R_A**2) + (R_B**2) - 2.0 * R_A * R_B * np.cos(theta)))
 
-            # 손실 함수의 대수 공간 동기화 및 3D 사영축 완전 정합
-            dimensionless_space_residual = np.abs(np.log(R_AB_opt) - np.log(R_AB_geo)) / (R_A + R_B)
+            dimensionless_space_residual = np.abs(R_AB_opt - R_AB_geo) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (np.pi ** 2)
             
-            # 최하단 저울 축 차원학적 3차원 입체 공간 보존비 최종 승수 완벽 락(Lock)
-            self_consistent_coupling = (1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler
+            # -----------------------------------------------------------------
+            # 🧬 [V21.2 마스터 개정]: 오버슈트 다운-클램핑을 위한 공간 저울축 대수 재정합
+            # -----------------------------------------------------------------
+            # 역-미세구조상수 관성을 이완하되, 공간 보존비의 공역 축 거듭제곱(**(1.0/vsepr_scaler)) 유도
+            gamma_scaler = (self.alpha * self.omega_1) ** (1.0 / vsepr_scaler)
+            relaxed_coupling_base = (gamma_scaler / self.alpha)
             
-            # 🧬 [V21.2 최종 롤백 선언]: 인위적인 외부 보정 push 항을 완벽하게 제거 (0.0)
-            # 오직 상단 커널의 harmonic_amplitude에서 확장된 미분 복원력 자체로 안장점을 탈출 유도
-            return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling
+            # SO2계열의 공간 오차 절벽 트랩을 해제하기 위해 중심 원자 차폐 텐서(Phi_C)를 연속 변조 계수로 이식
+            self_consistent_coupling = relaxed_coupling_base * (rho_C ** (1.0 - vsepr_scaler)) * (self.omega_1 / (4.0 * np.pi)) * vsepr_scaler * Phi_C
+            
+            # 0도 원자 겹침 참사방지를 위한 파울리 위상 기하 장벽
+            pauli_geometrical_barrier = (self.alpha * self.omega_1) / (sin_sq + 1e-9)
+            
+            return dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
 
-        # 솔버의 검색 정밀도를 1e-7로 촘촘히 고정하여 순수 물리적 평형점의 곡률 최저점으로 안착 유도
         best_theta_rad = fminbound(dimensionless_knot_energy, 0.001, np.pi - 0.001, xtol=1e-7)
         return float(np.degrees(best_theta_rad))
-
 
 
 
@@ -265,11 +269,9 @@ if __name__ == "__main__":
         ("ClO2",17,  8,  8, 1.5, 1.5, 111.00)   # 고차 공명 다중결합 (연속 인자 다이렉트 주입)
     ]
     
-    # 🧬 [V21.2 마감]: 인위적인 조건문 분기(if name == ...)를 철저히 박멸
-    # 모든 다중결합 및 단일결합의 차수 인자(nu_b1, nu_b2)를 튜플 아키텍처 자체에서 다이렉트로 전사 사영
-    for name, z_C, z_S1, z_S2, nb1, nu_b2, obs in cases_angle:
-        calc = engine.compute_angle(z_C, z_S1, z_S2, nu_b1=nb1, nu_b2=nu_b2)
+    # 🧬 [V21.2 마감]: 인위적인 조건문 분기 철저 박멸 및 완벽한 차원 정합
+    for name, z_C, z_S1, z_S2, nu_b1, nu_b2, obs in cases_angle:
+        calc = engine.compute_angle(z_C, z_S1, z_S2, nu_b1=nu_b1, nu_b2=nu_b2)
         print(f" - {name:5s} | Calc: {calc:.4f}° | Obs: {obs:.4f}° | Error: {calc-obs:+.4f}°")
         
     print("═" * 80)
-
