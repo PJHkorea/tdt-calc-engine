@@ -115,8 +115,6 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         final_gated_angle = (1.0 - angle_gate_modifier) * base_angle + angle_gate_modifier * target_restoration
         final_angle = final_gated_angle + neural_correction
 
-        
-        final_angle = gated_angle + neural_correction
         return final_angle
 
 
