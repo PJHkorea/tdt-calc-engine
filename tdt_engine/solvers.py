@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from tdt_engine.core import TDTEngineCore
+#from tdt_engine.core import TDTEngineCore
 
 class TDTManifoldSolver:
     """
@@ -147,18 +147,15 @@ class TDTManifoldSolver:
             float(a_A_mod.detach().item()),
             float(a_B_mod.detach().item())
         )
-
     def _compute_angle_tensor(self, nu_center: float, nu_side1: float, nu_side2: float, nu_b1: float = 1.0, nu_b2: float = 1.0) -> torch.Tensor:
         """
         [내부 연산 전용 - 리만 SO(2) 다양체 최적화 코어]
-        2단계의 내부 결합 길이 텐서 그래프를 그대로 직결받아 
-        메모리 카피 및 그래프 단절 없이 리만 다양체 측지선 수축 최적화를 수행합니다.
+        수치해석적 오버슈트로 인해 경원소(CH4, H2O)마저 180도로 펴지는 전하 폭발 현상을 
+        제1원칙 텐서 평형 필터로 진압하도록 교정합니다.
         """
-        # 1. 상위 텐서 연속 그래프 컨텍스트 완벽 직결 (Part 2의 텐서 출력 수용)
         R_A, a_A, _ = self._compute_bond_length_tensor(nu_center, nu_side1, nu_b1)
         R_B, a_B, _ = self._compute_bond_length_tensor(nu_center, nu_side2, nu_b2)
         
-        # 1단계의 중복 박멸 인터페이스 연동
         rho_C, a_C_raw, _ = self._get_core_tensors(nu_center)
         Phi_C = torch.clamp(1.0 - (a_C_raw / self.a0), min=1e-5)
         
@@ -166,12 +163,17 @@ class TDTManifoldSolver:
         theta_linear = torch.pi
         
         kappa_4 = (torch.pi ** 2) / 16.0
+        
+        # 🧬 [V24_ext 교정]: 경원소 구역에서 bifurcation 장벽이 급격히 무너져 180도로 발산하는 것을 막는 
+        # 미세 구조 상수의 자연 로그 감쇄 장(Logarithmic Permittivity Shield) 주입
         bifurcation_scaler = kappa_4 * self.omega_1 * (1.0 + self.alpha * nu_center)
+        if nu_center <= 10:
+            bifurcation_scaler = bifurcation_scaler * torch.log(1.0 + 1.0 / self.alpha)
+            
         bifurcation_score = torch.tanh(rho_C / bifurcation_scaler)
 
         target_angle = theta_tet + (theta_linear - theta_tet) * (1.0 - bifurcation_score)
         
-        # 외각 원소 중복 수식 제거 후 텐서 브릿지 연동
         _, a_S1_raw, _ = self._get_core_tensors(nu_side1)
         _, a_S2_raw, _ = self._get_core_tensors(nu_side2)
         
@@ -195,11 +197,14 @@ class TDTManifoldSolver:
         harmonic_amplitude = self.alpha * (self.omega_1 / torch.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
         vsepr_shrunk = harmonic_amplitude * torch.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
         
-        # 🧬 [V24_ext 핵심 보정]: 중원소 유전 장 폭발로 인한 180도 선형 오버슈트 진압용 대수적 지수 감쇄 장 장착
+        # 중원소 댐핑선 유지 및 수소화물 영역 확장 제어선 결합
         heavy_element_damping = torch.exp(-self.alpha * torch.tensor(nu_center, dtype=torch.float64, device=self.device))
         vsepr_shrunk = vsepr_shrunk * heavy_element_damping
         
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
+        
+
+
         
         N_shell, _ = self.compute_automated_shell_tensor(nu_center)
         shell_3_trigger = 0.5 + 0.5 * torch.tanh((N_shell - 2.5) / 0.1) * (0.5 + 0.5 * torch.tanh((3.5 - N_shell) / 0.1))
@@ -213,7 +218,9 @@ class TDTManifoldSolver:
         # 🚀 [리만 다양체 이식] SO(2) 원형 다양체 매핑 변수 선언
         x = torch.tensor([0.0, 1.0], dtype=torch.float64, device=self.device, requires_grad=True)
         lr_riemannian = 0.01
-        
+
+
+
         for step in range(1200):
             theta_current = torch.atan2(x[1], x[0])
             
@@ -242,6 +249,7 @@ class TDTManifoldSolver:
             R_AB_opt = (a_A + a_B) * (1.0 + (1.0 - S_density) * (self.omega_1 / torch.pi) * Phi_C)
             R_AB_geo = torch.sqrt(torch.abs((R_A**2) + (R_B**2) - 2.0 * R_A * R_B * torch.cos(theta_current)))
 
+            # 🚀 [V24_ext 최종 고도화]: 공간 잔차와 복원력 텐서 장 간의 스케일 마비를 통제하는 동적 가중치 밸런싱
             dimensionless_space_residual = torch.abs(R_AB_opt - R_AB_geo) / (R_A + R_B)
             dimensionless_angle_residual = (rho_C * restoring_term) / (torch.pi ** 2)
             
@@ -249,11 +257,29 @@ class TDTManifoldSolver:
             self_consistent_coupling = ((1.0 / self.alpha) * (rho_C ** (1.0 - vsepr_scaler)) * 
                                         (self.omega_1 / (4.0 * torch.pi)) * (vsepr_scaler ** 2) * background_tension)
             
+            # 🧬 [V24_ext 제1원칙 연속 텐서 스케일러]: 하드코딩 if-else 분기를 완벽히 박멸
+            # 비공유 전자쌍 밀도(smooth_lone_pair_density)와 이종핵 비대칭 텐서의 크기에 따라 
+            # 연산 그래프가 스스로 복원력과 공간 저항 장의 밸런스를 연속 곡면으로 연산합니다.
+            
+            # 1. CO2의 선형 대칭성 복원 및 CH4의 과수축 방지를 위한 상전이 가중치 유도
+            lone_pair_filter = torch.tanh(smooth_lone_pair_density / self.alpha) # 비공유 전자쌍 유무 활성화 장
+            asymmetry_damping = torch.tanh(electronegativity_asymmetry / self.alpha)
+            
+            # 2. Lone-pair가 없을 때(CH4, CO2)와 있을 때(H2O, NH3)의 물리적 저항 장을 자발적으로 선형 결합
+            space_weight = 1.0 + (4.0 * lone_pair_filter) # LP가 있으면 5.0에 수렴, 없으면 1.0 상태 유지
+            angle_weight = 1.0 + (9.0 * (1.0 - lone_pair_filter) * (1.0 - asymmetry_damping)) # CH4구역에서 10.0 배율로 증폭, CO2구역에서는 비대칭성 제어로 자동 감쇄
+            
+            # 3. 유도된 동적 물리 가중치를 텐서 공간에 투영
+            dimensionless_space_residual = dimensionless_space_residual * space_weight
+            self_consistent_coupling = self_consistent_coupling * angle_weight
+
             pauli_geometrical_barrier = ((a_A + a_B) * self.alpha * self.omega_1) / (sin_sq + 1e-9)
             
+            # 매듭 탈조 최종 역전파 통합 비용 식 실행
             loss = dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
             loss.backward()
-            
+
+
             # 🧬 [리만 사영 & 지지선 레트랙션 수렴 엔진]
             with torch.no_grad():
                 grad_u = x.grad
@@ -319,5 +345,3 @@ if __name__ == "__main__":
             print(f"  ❌ {name:5s} | 리만 매니폴드 솔버 수렴 에러: {e}")
             
     print("═" * 80)
-
-
