@@ -184,13 +184,19 @@ class TDTManifoldSolver:
         harmonic_amplitude = self.alpha * (self.omega_1 / torch.pi) * (1.0 + self.alpha * electronegativity_asymmetry)
         vsepr_shrunk = harmonic_amplitude * torch.sqrt(smooth_lone_pair_density) * self.omega_1 / (Phi_side_tensor ** vsepr_scaler)
         
+        # 🧬 [V24_ext 핵심 보정]: 중원소 유전 장 폭발로 인한 180도 선형 오버슈트 진압용 대수적 지수 감쇄 장 장착
+        heavy_element_damping = torch.exp(-self.alpha * torch.tensor(nu_center, dtype=torch.float64, device=self.device))
+        vsepr_shrunk = vsepr_shrunk * heavy_element_damping
+        
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
         
         N_shell, _ = self.compute_automated_shell_tensor(nu_center)
         shell_3_trigger = 0.5 + 0.5 * torch.tanh((N_shell - 2.5) / 0.1) * (0.5 + 0.5 * torch.tanh((3.5 - N_shell) / 0.1))
         
         kepler_packing = torch.pi / torch.sqrt(torch.tensor(18.0, dtype=torch.float64, device=self.device))
-        h2s_theoretical_target = target_angle - (self.alpha * self.omega_1 * ((2.0 * kepler_packing + self.alpha) / Phi_side_tensor))
+        
+        # 🧬 [V24_ext 완충 공간 추가]: 분모 싱귤래리티를 방지하기 위한 alpha * omega_1 마디선 보강
+        h2s_theoretical_target = target_angle - (self.alpha * self.omega_1 * ((2.0 * kepler_packing + self.alpha) / (Phi_side_tensor + self.alpha * self.omega_1)))
         target_angle = target_angle * (1.0 - shell_3_trigger) + h2s_theoretical_target * shell_3_trigger
 
         # 🚀 [리만 다양체 이식] SO(2) 원형 다양체 매핑 변수 선언
