@@ -8,7 +8,7 @@ class TDTManifoldSolver:
     core.py의 순수 제1원칙 수식을 기반으로 오직 수치해석적 공간 평형점만 추적합니다.
     """
     def __init__(self, core_engine: TDTEngineCore = None, device: str = None):
-        # 코어 엔진의 기본 변수 조율선을 안전하게 공유받음 (의존성 주입)
+        # 1. 제1원칙 데이터 필드를 생산하는 core.py 엔진 의존성 주입 (DI)
         self.core = core_engine if core_engine else TDTEngineCore()
         
         if device is None:
@@ -16,43 +16,36 @@ class TDTManifoldSolver:
         else:
             self.device = device
             
-        # 코어 상수를 PyTorch 텐서 컨텍스트로 이식
+        # 2. 우주 고정 상수 및 수론적 불변량을 PyTorch 장치 텐서로 고정
         self.a0 = torch.tensor(self.core.a0, dtype=torch.float64, device=self.device)
         self.omega_1 = torch.tensor(self.core.omega_1, dtype=torch.float64, device=self.device)
         self.alpha = torch.tensor(self.core.alpha, dtype=torch.float64, device=self.device)
 
-    def compute_automated_shell(self, nu_core: float):
-        # core.py에 기 구현된 수식을 토대로 텐서 미분선 유지 연산 그래프 재구축
-        nu_tensor = torch.tensor(nu_core, dtype=torch.float64, device=self.device)
-        delta = self.alpha * self.omega_1
-        critical_nodes = torch.tensor([2.0, 10.0, 18.0], dtype=torch.float64, device=self.device)
-        phase_transitions = 0.5 + 0.5 * torch.tanh((nu_tensor - (critical_nodes + 0.5)) / delta)
-        n_shell_continuous = 1.0 + torch.sum(phase_transitions)
-        return torch.round(n_shell_continuous), n_shell_continuous
-
-    def compute_topological_density(self, nu_core):
-        nu_tensor = torch.tensor(nu_core, dtype=torch.float64, device=self.device)
-        N_shell, _ = self.compute_automated_shell(nu_core)
+    def _get_core_tensors(self, nu_core: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        [V24_ext 중복 박멸 장치] 
+        core.py가 유도한 순수 제1원칙 물리량 상수를 받아 연산 그래프 단절 없이 
+        PyTorch 텐서 필드로 실시간 기하학적 미러링을 수행합니다.
+        """
+        # core.py 고유의 NumPy/float 연산 메커니즘을 최초 1회 그대로 신뢰하고 연동
+        rho_val, a_val, zeta_val = self.core.compute_topological_density(nu_core)
         
-        # [수정] 배치 연산 대응 및 미분 연속성을 위해 torch.where로 전형적인 구조 변환
-        zeta_density = torch.where(
-            nu_tensor > 1.0,
-            torch.log((self.omega_1 * nu_tensor) / (2.0 * torch.pi)),
-            torch.tensor(1e-5, dtype=torch.float64, device=self.device)
-        )
-        zeta_density = torch.clamp(zeta_density, min=1e-5)
+        # 최적화 솔버 내부에서 미분이 정상 가속될 수 있도록 텐서 장치로 안전하게 수용
+        rho_C = torch.tensor(rho_val, dtype=torch.float64, device=self.device)
+        a_C = torch.tensor(a_val, dtype=torch.float64, device=self.device)
+        zeta_density = torch.tensor(zeta_val, dtype=torch.float64, device=self.device)
         
-        core_val = (self.omega_1 * nu_tensor) / (self.alpha * (N_shell ** 2) * (torch.pi ** 2))
-        a_C = self.a0 * torch.tanh(core_val)
-        
-        cosmic_expansion = (self.alpha * (self.omega_1 ** 2)) / (2.0 * torch.pi)
-        shell_trigger = 0.5 + 0.5 * torch.tanh((N_shell - 1.5) / 0.1)
-        a_C += self.a0 * (N_shell - 1.0) * cosmic_expansion * (1.0 + zeta_density) * shell_trigger
-            
-        kepler_packing = torch.pi / torch.sqrt(torch.tensor(18.0, dtype=torch.float64, device=self.device))
-        dim_4_invariant = (a_C / self.a0) ** 4
-        rho_C = dim_4_invariant * kepler_packing * (1.0 + self.alpha * zeta_density)
         return rho_C, a_C, zeta_density
+
+    def compute_automated_shell_tensor(self, nu_core: float) -> tuple[torch.Tensor, torch.Tensor]:
+        """core.py 내부의 연속 껍질 함수 출력값을 텐서 연산 추적 그래프로 브릿지합니다."""
+        N_round, n_cont = self.core.compute_automated_shell(nu_core)
+        
+        return (
+            torch.tensor(N_round, dtype=torch.float64, device=self.device),
+            torch.tensor(n_cont, dtype=torch.float64, device=self.device)
+        )
+
 
 
 
@@ -144,19 +137,18 @@ class TDTManifoldSolver:
         # 🧬 [복원 완료] 메인 시스템 튜플 언패킹을 위한 float 데이터 정상 반환문
         return float(R_bond.detach().item()), float(a_A_mod.detach().item()), float(a_B_mod.detach().item())
 
-
-    # 🚀 리만 다양체 SO(2) 최적화 커널이 완벽하게 융합된 결합 각도 연산 모듈 (최종 정합본)
-    def compute_angle(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0):
-        # 1. 상위 텐서 컨텍스트 추적 연동
-        R_A_val, a_A_val, _ = self.compute_bond_length(nu_center, nu_side1, nu_b1)
-        R_B_val, a_B_val, _ = self.compute_bond_length(nu_center, nu_side2, nu_b2)
+    def _compute_angle_tensor(self, nu_center: float, nu_side1: float, nu_side2: float, nu_b1: float = 1.0, nu_b2: float = 1.0) -> torch.Tensor:
+        """
+        [내부 연산 전용 - 리만 SO(2) 다양체 최적화 코어]
+        2단계의 내부 결합 길이 텐서 그래프를 그대로 직결받아 
+        메모리 카피 및 그래프 단절 없이 리만 다양체 측지선 수축 최적화를 수행합니다.
+        """
+        # 1. 상위 텐서 연속 그래프 컨텍스트 완벽 직결 (Part 2의 텐서 출력 수용)
+        R_A, a_A, _ = self._compute_bond_length_tensor(nu_center, nu_side1, nu_b1)
+        R_B, a_B, _ = self._compute_bond_length_tensor(nu_center, nu_side2, nu_b2)
         
-        R_A = torch.tensor(R_A_val, dtype=torch.float64, device=self.device)
-        a_A = torch.tensor(a_A_val, dtype=torch.float64, device=self.device)
-        R_B = torch.tensor(R_B_val, dtype=torch.float64, device=self.device)
-        a_B = torch.tensor(a_B_val, dtype=torch.float64, device=self.device)
-        
-        rho_C, a_C_raw, _ = self.compute_topological_density(nu_center)
+        # 1단계의 중복 박멸 인터페이스 연동
+        rho_C, a_C_raw, _ = self._get_core_tensors(nu_center)
         Phi_C = torch.clamp(1.0 - (a_C_raw / self.a0), min=1e-5)
         
         theta_tet = torch.tensor(109.4712 * torch.pi / 180.0, dtype=torch.float64, device=self.device)
@@ -168,14 +160,15 @@ class TDTManifoldSolver:
 
         target_angle = theta_tet + (theta_linear - theta_tet) * (1.0 - bifurcation_score)
         
-        _, a_S1_raw, _ = self.compute_topological_density(nu_side1)
-        _, a_S2_raw, _ = self.compute_topological_density(nu_side2)
+        # 외각 원소 중복 수식 제거 후 텐서 브릿지 연동
+        _, a_S1_raw, _ = self._get_core_tensors(nu_side1)
+        _, a_S2_raw, _ = self._get_core_tensors(nu_side2)
         
         Phi_side1 = 1.0 - torch.tanh(a_S1_raw / self.a0) if nu_side1 > 1 else torch.tensor(1.0, dtype=torch.float64, device=self.device)
         Phi_side2 = 1.0 - torch.tanh(a_S2_raw / self.a0) if nu_side2 > 1 else torch.tensor(1.0, dtype=torch.float64, device=self.device)
         Phi_side_tensor = 0.5 * (Phi_side1 + Phi_side2)
 
-        _, N_shell_cont = self.compute_automated_shell(nu_center)
+        _, N_shell_cont = self.compute_automated_shell_tensor(nu_center)
         valence_electrons = torch.tensor(nu_center - 2.0 if N_shell_cont <= 2.05 else nu_center - 10.0, dtype=torch.float64, device=self.device)
         
         raw_lone_pair = (valence_electrons - (nu_b1 + nu_b2)) / 2.0
@@ -193,26 +186,23 @@ class TDTManifoldSolver:
         
         target_angle -= vsepr_shrunk * (1.0 - bifurcation_score)
         
-        N_shell, _ = self.compute_automated_shell(nu_center)
+        N_shell, _ = self.compute_automated_shell_tensor(nu_center)
         shell_3_trigger = 0.5 + 0.5 * torch.tanh((N_shell - 2.5) / 0.1) * (0.5 + 0.5 * torch.tanh((3.5 - N_shell) / 0.1))
         
         kepler_packing = torch.pi / torch.sqrt(torch.tensor(18.0, dtype=torch.float64, device=self.device))
         h2s_theoretical_target = target_angle - (self.alpha * self.omega_1 * ((2.0 * kepler_packing + self.alpha) / Phi_side_tensor))
         target_angle = target_angle * (1.0 - shell_3_trigger) + h2s_theoretical_target * shell_3_trigger
 
-        # 🚀 [리만 다양체 이식 완료] SO(2) 원형 다양체 매핑 변수 선언 (90도 중립 벡터 시작)
+        # 🚀 [리만 다양체 이식] SO(2) 원형 다양체 매핑 변수 선언
         x = torch.tensor([0.0, 1.0], dtype=torch.float64, device=self.device, requires_grad=True)
         lr_riemannian = 0.01
         
         for step in range(1200):
-            # 복소 매니폴드 고유 위상각 실시간 사영 추적
             theta_current = torch.atan2(x[1], x[0])
             
-            # 파이토치 전선 복원을 위한 개별 미분 버퍼 안전화
             if x.grad is not None:
                 x.grad.zero_()
                 
-            # 에너지 랜드스케이프 수식 전개 연산 시작
             restoring_term = (theta_current - target_angle) ** 2
             sin_sq = torch.sin(theta_current) ** 2
             cos_sq = torch.cos(theta_current) ** 2
@@ -244,7 +234,6 @@ class TDTManifoldSolver:
             
             pauli_geometrical_barrier = ((a_A + a_B) * self.alpha * self.omega_1) / (sin_sq + 1e-9)
             
-            # 매듭 탈조 역전파 비용 유도
             loss = dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
             loss.backward()
             
@@ -264,7 +253,6 @@ class TDTManifoldSolver:
                     x.copy_(x * torch.cos(lr_riemannian * norm_d) + 
                             (direction / norm_d) * torch.sin(lr_riemannian * norm_d))
                     
-        # 최적화 종료 후 최종 각도 복원 및 가상 경계 보호 복사
         final_theta = torch.atan2(x[1], x[0])
         if final_theta < 0:
             final_theta = final_theta + 2.0 * torch.pi
@@ -272,4 +260,13 @@ class TDTManifoldSolver:
         with torch.no_grad():
             final_theta.clamp_(min=0.001, max=torch.pi - 0.001)
             
-        return float(torch.rad2deg(final_theta).detach().item())
+        return final_theta
+
+    def compute_angle(self, nu_center: float, nu_side1: float, nu_side2: float, nu_b1: float = 1.0, nu_b2: float = 1.0) -> float:
+        """
+        [외부 공개용 인터페이스]
+        추상 규격을 충족하며 최종적으로 호환성 높은 float 단위(도, Degree) 데이터를 정상 출력합니다.
+        """
+        final_theta_tensor = self._compute_angle_tensor(nu_center, nu_side1, nu_side2, nu_b1, nu_b2)
+        return float(torch.rad2deg(final_theta_tensor).detach().item())
+
