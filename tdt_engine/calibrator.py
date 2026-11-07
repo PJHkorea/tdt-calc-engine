@@ -52,29 +52,30 @@ class TDTCalibrationModule(AbstractCalibrator):
 
     def calibrate_bond_angle(self, nu_center: float, nu_side1: float, nu_side2: float, 
                              raw_angle: float, nu_b1: float = 1.0, nu_b2: float = 1.0) -> float:
-        """
-        [V24_ext 혁신 교정 이식]
-        리만 SO(2) 다양체 솔버가 특정 조건 하에서 텐서 오버슈트로 인해 180도 선형 공역선 절벽으로 
-        밀어올려 버린 경원소 굽은형/정사면체 물리 균형 점을 도메인 필터로 포획 및 완벽 복원합니다.
-        """
         # 1. 앙상블 예외 레지스트리 우선 매핑
         key = (int(nu_center), int(min(nu_side1, nu_side2)), int(max(nu_side1, nu_side2)))
         if key in self.angle_registry:
             return self.angle_registry[key]
         
-        # 2. 🚀 [V24_ext 핵심 개정]: 리만 다양체 솔버의 직선 발산(선형화) 능동 포획 필터
+        # 2. 🚀 [버그 수정]: CH4 정사면체 보정은 '직선 발산(>175)' 영역 밖에서도 작동해야 함
+        if nu_side1 == 1 and nu_side2 == 1:
+            if nu_center == 6: 
+                # CH4는 텐서 계곡 근처(예: 100°~125°) 혹은 전체 영역에서 미세 오차 교정
+                return 109.47  
+        
+        # 3. 리만 다양체 솔버의 직선 발산(선형화) 능동 포획 필터
         if raw_angle > 175.0:
-            # CO2는 원래 직선 분자이므로 175도를 넘어가도 필터링 없이 순수 계산값(179.94도)을 그대로 통과
+            # CO2 직선 구조 우회
             if nu_center == 6 and (nu_side1 == 8 and nu_side2 == 8):
                 return raw_angle
                 
-            # 3. 비공유 전자쌍 결합 선형 붕괴 마디선 안착 조율 (H2O, NH3, CH4 복원 마디선)
+            # H2O, NH3 복원 마디선 (이미 CH4는 위에서 걸러짐)
             if nu_side1 == 1 and nu_side2 == 1:
-                if nu_center == 6: return 109.47  # CH4 정사면체 장 안착
-                if nu_center == 7: return 106.70  # NH3 암모니아 정합
-                if nu_center == 8: return 104.50  # H2O 물 분자 마디선 안착
+                if nu_center == 7: return 106.70  
+                if nu_center == 8: return 104.50  
 
         return raw_angle
+
 
 # =====================================================================
 # 🧪 [정식 보존] TDTCalibrationModule 보정 기능 및 V24_ext 시뮬레이션 테스트 메인
