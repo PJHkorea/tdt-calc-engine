@@ -46,20 +46,22 @@ class TDTManifoldSolver:
             torch.tensor(n_cont, dtype=torch.float64, device=self.device)
         )
 
-
-
-
-
-    def compute_bond_length(self, nu_A, nu_B, nu_bond=1.0):
-        rho_A, a_A, delta_zeta_A = self.compute_topological_density(nu_A)
-        rho_B, a_B, delta_zeta_B = self.compute_topological_density(nu_B)
+    def _compute_bond_length_tensor(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        [내부 연산 전용 - 핵심 텐서 그래프]
+        core.py와 연동하여 수리 잔차 최적화를 PyTorch 텐서 상태 그대로 완벽히 보존합니다.
+        하부 각도 솔버 모듈과 미분 연속성(Gradient Chain)을 매끄럽게 연결합니다.
+        """
+        # 1단계의 중복 박멸 인터페이스 연동 (존재하지 않던 기존 함수 호출 제거)
+        rho_A, a_A, delta_zeta_A = self._get_core_tensors(nu_A)
+        rho_B, a_B, delta_zeta_B = self._get_core_tensors(nu_B)
         
-        # [수정] 파이썬 상수를 안전하게 텐서화
+        # 파이썬 상수를 안전하게 텐서화
         sum_nu = nu_A + nu_B
         asymmetry_factor = torch.tensor(((nu_A - nu_B) / sum_nu) ** 2 if sum_nu > 0 else 0.0, dtype=torch.float64, device=self.device)
         chi_tensor = 1.0 - (self.alpha * asymmetry_factor * self.omega_1 * (torch.pi / 2.0))
         
-        # [수정] 텐서 그래프 단절 완전 차단 (torch.where 도입)
+        # 텐서 그래프 단절 완전 차단 (torch.where 도입)
         sum_rho = rho_A + rho_B
         density_asymmetry = torch.where(
             sum_rho > 0.0,
@@ -88,7 +90,7 @@ class TDTManifoldSolver:
         
         if (nu_A == 1 or nu_B == 1) and (nu_A > 1 or nu_B > 1):
             max_nu = max(nu_A, nu_B)
-            N_max, _ = self.compute_automated_shell(max_nu)
+            N_max, _ = self.compute_automated_shell_tensor(max_nu)
             hydride_expansion = 1.0 + (asymmetry_factor * (1.0 - scale_invariant) * (self.omega_1 / (N_max * torch.pi)))
             mod_A *= hydride_expansion
             mod_B *= hydride_expansion
@@ -102,8 +104,8 @@ class TDTManifoldSolver:
         a_A_mod = a_A * mod_A * chi_tensor
         a_B_mod = a_B * mod_B * chi_tensor
         
-        N_A, _ = self.compute_automated_shell(nu_A)
-        N_B, _ = self.compute_automated_shell(nu_B)
+        N_A, _ = self.compute_automated_shell_tensor(nu_A)
+        N_B, _ = self.compute_automated_shell_tensor(nu_B)
         shell_trigger_A = 0.5 + 0.5 * torch.tanh((N_A - 1.5) / 0.1)
         shell_trigger_B = 0.5 + 0.5 * torch.tanh((N_B - 1.5) / 0.1)
         
@@ -117,25 +119,34 @@ class TDTManifoldSolver:
         
         metric_tensor_modifier = 1.0 + torch.log(M_log_argument) * dimensionless_coupling_dim
         
-                # 🚀 [수정] 초기 추측값 복사 후 최적화 궤적 안전화 (lr 다운사이징 및 에폭 상향 준비)
+        # 초기 추측값 복사 후 최적화 궤적 안전화
         R_bond = (a_A_mod + a_B_mod).detach().clone().requires_grad_(True)
-        optimizer = torch.optim.Adam([R_bond], lr=0.005) # 0.05 -> 0.005 안정화
+        optimizer = torch.optim.Adam([R_bond], lr=0.005)
 
-        # 🧬 [복원 완완] 경사하강법을 통한 수리 물리적 최소 에너지 마디선 추적 루프
+        # 경사하강법을 통한 수리 물리적 최소 에너지 마디선 추적 루프
         for _ in range(200):
             optimizer.zero_grad()
-            # R_bond 수축 방지 안전 클램프 장치
             R_clipped = torch.clamp(R_bond, min=0.1)
             left_term = torch.log(a_A_mod * a_B_mod) - metric_tensor_modifier * (2.0 * torch.log(R_clipped))
             right_term = -R_clipped / (a_A_mod + a_B_mod)
             
-            # 최소화 대상인 잔차 제곱합 정의
             residual = (left_term - right_term) ** 2
             residual.backward()
             optimizer.step()
             
-        # 🧬 [복원 완료] 메인 시스템 튜플 언패킹을 위한 float 데이터 정상 반환문
-        return float(R_bond.detach().item()), float(a_A_mod.detach().item()), float(a_B_mod.detach().item())
+        return R_bond, a_A_mod, a_B_mod
+
+    def compute_bond_length(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[float, float, float]:
+        """
+        [외부 공개용 인터페이스]
+        추상 기하학 규격을 준수하며 기성 시뮬레이터 호환용 float 튜플 데이터를 반환합니다.
+        """
+        R_bond, a_A_mod, a_B_mod = self._compute_bond_length_tensor(nu_A, nu_B, nu_bond)
+        return (
+            float(R_bond.detach().item()),
+            float(a_A_mod.detach().item()),
+            float(a_B_mod.detach().item())
+        )
 
     def _compute_angle_tensor(self, nu_center: float, nu_side1: float, nu_side2: float, nu_b1: float = 1.0, nu_b2: float = 1.0) -> torch.Tensor:
         """
@@ -275,4 +286,38 @@ class TDTManifoldSolver:
         """
         final_theta_tensor = self._compute_angle_tensor(nu_center, nu_side1, nu_side2, nu_b1, nu_b2)
         return float(torch.rad2deg(final_theta_tensor).detach().item())
+
+# =====================================================================
+# 🧪 [정식 검증] TDTManifoldSolver 고속 하이브리드 연산 벤치마크 메인
+# =====================================================================
+if __name__ == "__main__":
+    # 1. 가속화 하이브리드 솔버 엔진 인스턴스화
+    solver_engine = TDTManifoldSolver()
+    
+    print("═" * 80)
+    print(" TDTManifoldSolver Production Verification (V24_ext)")
+    print("═" * 80)
+    print(f" - 가동 연산 디바이스 백엔드 환경: [{solver_engine.device.upper()}]")
+    print("-" * 80)
+    
+    # 2. 결합 각도 핵심 벤치마크 레퍼런스 물질 4종 검증
+    test_cases_angle = [
+        ("CO2",  6,  8,  8, 2.0, 2.0, 180.00),
+        ("CH4",  6,  1,  1, 1.0, 1.0, 109.47),
+        ("H2O",  8,  1,  1, 1.0, 1.0, 104.50),
+        ("NH3",  7,  1,  1, 1.0, 1.0, 106.70)
+    ]
+    
+    print("\n [실시간 수리 평형 검증] 결합 각도(Bond Angle) 상전이 스펙트럼")
+    print("-" * 80)
+    for name, z_C, z_S1, z_S2, nb1, nb2, obs in test_cases_angle:
+        try:
+            calc_ang = solver_engine.compute_angle(z_C, z_S1, z_S2, nu_b1=nb1, nu_b2=nb2)
+            error = calc_ang - obs
+            print(f"  📐 {name:5s} | Calc: {calc_ang:8.4f}° | Obs: {obs:8.4f}° | Error: {error:+8.4f}°")
+        except Exception as e:
+            print(f"  ❌ {name:5s} | 리만 매니폴드 솔버 수렴 에러: {e}")
+            
+    print("═" * 80)
+
 
