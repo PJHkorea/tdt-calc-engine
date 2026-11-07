@@ -16,6 +16,25 @@
 상세한 수리물리학적 유도 과정은 저장소 내 `DERIVATION.md` 파일에서 확인할 수 있습니다.
 
 ---
+### 에이전트 프롬프트는 베이스버전이랑 v2를 순차적으로 적용해주세요
+아래는 예시입니다
+```text
+# AI Agent Initialization Script (Example)
+def load_agent_core_rules():
+    v1_philosophy = read_file("AGENT_PROMPT.md")
+    v2_execution = read_file("AGENT_PROMPT_v2.md")
+    
+    system_prompt = f"""
+    You are an advanced physics-informed molecular generator agent.
+    [STAGE 1: INTERPRET ARCHITECTURAL CORE]
+    {v1_philosophy}
+    
+    [STAGE 2: ENFORCE RUNTIME STRICT CONSTRAINTS]
+    {v2_execution}
+    """
+    return system_prompt
+```
+---
 ### core.py
 ```text
 ════════════════════════════════════════════════════════════════════════════════
