@@ -110,9 +110,11 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         features = torch.stack([nu_center, nu_s_min, nu_s_max, raw_angle, nu_b1, nu_b2], dim=-1)
         neural_correction = self.angle_calibrator(features)
         
-        # 4. 전체 대수 제어식 최종 마스킹 결착 (조건문 없는 그라디언트 고속도로)
-        base_angle = torch.where(ch4_trigger > 0.5, torch.tensor(109.47, dtype=torch.float64, device=self.device), raw_angle)
-        gated_angle = torch.where(angle_gate_modifier > 0.5, target_restoration, base_angle)
+        # torch.where 대신 가중치 마스크 직접 곱연산 적용
+        base_angle = (1.0 - ch4_trigger) * raw_angle + ch4_trigger * torch.tensor(109.47, dtype=torch.float64, device=self.device)
+        final_gated_angle = (1.0 - angle_gate_modifier) * base_angle + angle_gate_modifier * target_restoration
+        final_angle = final_gated_angle + neural_correction
+
         
         final_angle = gated_angle + neural_correction
         return final_angle
