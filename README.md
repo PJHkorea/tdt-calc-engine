@@ -16,8 +16,8 @@
 상세한 수리물리학적 유도 과정은 저장소 내 `DERIVATION.md` 파일에서 확인할 수 있습니다.
 
 ---
-### 에이전트 프롬프트는 베이스버전이랑 v2를 순차적으로 적용해주세요
-아래는 예시입니다
+### 에이전트 사용시 프롬프트는 베이스버전이랑 v2를 순차적으로 적용해주세요.
+아래는 예시입니다.
 ```text
 # AI Agent Initialization Script (Example)
 def load_agent_core_rules():
