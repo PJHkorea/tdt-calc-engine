@@ -1,10 +1,9 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from scipy.optimize import fsolve
 
 class AbstractPredictor(ABC):
     """
-    TDT 계산 엔진의 수학적 예측 수식을 규정하는 추상 인터페이스 레이어입니다.
+    TDT 계산 엔진의 수학적 예측 및 기하학적 장(Field) 수식을 규정하는 추상 인터페이스 레이어입니다.
     이후 양자 기계학습(GNN) 대리 모델 등으로 확장 시 이 인터페이스를 상속받습니다.
     """
     @abstractmethod
@@ -16,7 +15,12 @@ class AbstractPredictor(ABC):
         pass
 
     @abstractmethod
-    def compute_bond_length(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[float, float, float]:
+    def compute_metric_fields(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[float, float, float]:
+        """
+        [V24 혁신 - 규격 개정] 
+        제3장의 초월 잔차 방정식을 풀기 위한 핵심 기하 변형 텐서 장 인자들을 공급합니다.
+        솔버와의 결합 가속을 위해 직접적인 수치해석 추적을 분리 격리합니다.
+        """
         pass
 
 
@@ -58,8 +62,8 @@ class TDTEngineCore(AbstractPredictor):
         rho_C = dim_4_invariant * kepler_packing * (1.0 + self.alpha * zeta_density)
         return float(rho_C), float(a_C), float(zeta_density)
 
-    def compute_bond_length(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[float, float, float]:
-        """DERIVATION.md 제3장 - 다중 중심 초월 잔차 결합 길이 컨버전스 연산"""
+    def compute_metric_fields(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[float, float, float]:
+        """DERIVATION.md 제3장 - 다중 중심 초월 잔차 결합 장(Metric Fields) 인자 유도"""
         rho_A, a_A, delta_zeta_A = self.compute_topological_density(nu_A)
         rho_B, a_B, delta_zeta_B = self.compute_topological_density(nu_B)
         
@@ -124,6 +128,17 @@ class TDTEngineCore(AbstractPredictor):
         
         metric_tensor_modifier = 1.0 + np.log(M_log_argument) * dimensionless_coupling_dim
         
+        # 🚀 [V24 혁신] 수치해석 솔버 의존성을 완전히 파쇄하고 순수 수리물리학 장(Field) 정보만 리턴합니다.
+        return float(a_A_mod), float(a_B_mod), float(metric_tensor_modifier)
+
+    def compute_bond_length(self, nu_A: float, nu_B: float, nu_bond: float = 1.0) -> tuple[float, float, float]:
+        """
+        [레거시 호환 및 검증 레이어] 
+        기존의 수치해석 뼈대 검증 스크립트와의 하위 호환성을 일시 보존하기 위한 간이 SciPy 루트 솔버입니다.
+        """
+        from scipy.optimize import fsolve
+        a_A_mod, a_B_mod, metric_tensor_modifier = self.compute_metric_fields(nu_A, nu_B, nu_bond)
+        
         def equilibrium_residual(R):
             if R <= 0.1: 
                 return 1e9 
@@ -136,19 +151,18 @@ class TDTEngineCore(AbstractPredictor):
         return float(R_bond[0]), float(a_A_mod), float(a_B_mod)
 
 
-
 # =====================================================================
-# 🧪 [임시 검증] TDTEngineCore 순수 수식 예측력 확인용 테스트 메인
-#    (확인 후 이 라인 밑으로 전체 삭제하시면 됩니다)
+# 🧪 [정식 보존] TDTEngineCore 제1원칙 기하 장(Field) 및 레거시 수렴 테스트
+#    (수식 고도화 시 코어 엔진 단독의 무결성 검증 자산으로 영구히 활용합니다)
 # =====================================================================
 if __name__ == "__main__":
     # 1. 코어 엔진 인스턴스화
     core_engine = TDTEngineCore()
     
     print("═" * 80)
-    print(" [TEMP TEST] TDTEngineCore Raw Formula Verification")
+    print(" [CORE TEST] TDTEngineCore 제1원칙 수식 고유 정합성 검증")
     print("═" * 80)
-    print(" - 목적: 보정 레이어(Calibration) 거치기 전 순수 수식 고유의 오차 검증")
+    print(" - 목적: 보정 레이어 및 외부 솔버 연동 전, 제1~3장 대수적 웰 장의 기초 오차 측정")
     print("-" * 80)
     
     # 2. 핵심 레퍼런스 테스트 케이스 5종 (분자명, Z_A, Z_B, 결합차수, 관측값)
@@ -163,16 +177,16 @@ if __name__ == "__main__":
     # 3. 루프 수행 및 결과 출력
     for name, z_A, z_B, nu_b, obs in test_cases:
         try:
-            # 코어 연산 수행 (추상 인터페이스 규격 호출)
+            # 개정된 하위 호환 레이어(fsolve 브릿지)를 통해 연산 수행
             calc_R, a_A_mod, a_B_mod = core_engine.compute_bond_length(z_A, z_B, nu_b)
             error = calc_R - obs
             
             print(f" 🧪 {name:5s} | Raw Calc: {calc_R:.4f} Å | Obs: {obs:.4f} Å | Error: {error:+.4f} Å")
-            # 디버깅용 유전 변형 반지름 로그 출력
-            print(f"         └─ [Debug Info] a_A_mod: {a_A_mod:.4f} | a_B_mod: {a_B_mod:.4f}")
+            # 디버깅용 유전 변형 반지름 로그 출력 (솔버 디버깅의 생명줄)
+            print(f"         └─ [Field Info] a_A_mod: {a_A_mod:.4f} | a_B_mod: {a_B_mod:.4f}")
             
         except Exception as e:
-            print(f" ❌ {name:5s} | 수치해석 솔버 수렴 실패 혹은 런타임 에러: {e}")
+            print(f" ❌ {name:5s} | 수치해석 뼈대 솔버 연산 실패 혹은 런타임 에러: {e}")
             
     print("═" * 80)
 
