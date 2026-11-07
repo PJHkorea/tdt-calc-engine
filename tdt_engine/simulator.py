@@ -36,21 +36,46 @@ class MaterialScreeningSimulator:
 
     def predict_molecule_geometry(self, center_z: int, side1_z: int, side2_z: int, nu_b1: float = 1.0, nu_b2: float = 1.0):
         """
-        [핵심 비즈니스 로직] 
+        [핵심 비즈니스 로직 - V24_ext 하이브리드 가속 인터페이스]
         리만 가속 솔버로부터 원시 물리 평형점 값을 자발적으로 유도한 뒤,
-        캘리브레이션 모듈에 통과시켜 최종 사후 보정이 완료된 결합 길이와 결합 각도를 도출합니다.
+        주입된 캘리브레이터 백엔드(정적 룰셋 vs PyTorch AI 가드레일)를 자동 탐지하여 최종 사후 보정을 집행합니다.
         """
-        # 1. 리만 다양체 가속 솔버 연산 수행 (nb2 오타 및 불필요한 locals 삼항연산자 제거 완료)
+        # 1. 리만 다양체 가속 솔버 연산 수행 (기존 정석 float 리턴 규격 엄격 유지)
         raw_r1, _, _ = self.solver.compute_bond_length(center_z, side1_z, nu_bond=nu_b1)
         raw_r2, _, _ = self.solver.compute_bond_length(center_z, side2_z, nu_bond=nu_b2)
         raw_angle = self.solver.compute_angle(center_z, side1_z, side2_z, nu_b1=nu_b1, nu_b2=nu_b2)
-        
-        # 2. 캘리브레이션 안전망 레이어를 거쳐 도메인 수렴 최종 보정
-        opt_r1 = self.calibration.calibrate_bond_length(center_z, side1_z, raw_r1)
-        opt_r2 = self.calibration.calibrate_bond_length(center_z, side2_z, raw_r2)
-        opt_angle = self.calibration.calibrate_bond_angle(center_z, side1_z, side2_z, raw_angle, nu_b1=nu_b1, nu_b2=nu_b2)
-        
+
+        # 🚀 [AI 가속 대응 하이브리드 브릿지]: 캘리브레이터가 PyTorch nn.Module 계열인지 검증
+        if hasattr(self.calibration, "length_calibrator") and hasattr(self.calibration, "angle_calibrator"):
+            import torch  # 지연 임포트(Lazy Import)로 PyTorch 미설치 환경 크래시 원천 방어
+            
+            device = getattr(self.calibration, "device", "cpu")
+            
+            # 입력 피처 직교 공간 매핑용 입력 텐서 일괄 변환
+            t_center = torch.tensor([float(center_z)], dtype=torch.float64, device=device)
+            t_side1 = torch.tensor([float(side1_z)], dtype=torch.float64, device=device)
+            t_side2 = torch.tensor([float(side2_z)], dtype=torch.float64, device=device)
+            t_b1 = torch.tensor([float(nu_b1)], dtype=torch.float64, device=device)
+            t_b2 = torch.tensor([float(nu_b2)], dtype=torch.float64, device=device)
+            
+            t_r1 = torch.tensor([raw_r1], dtype=torch.float64, device=device)
+            t_r2 = torch.tensor([raw_r2], dtype=torch.float64, device=device)
+            t_angle = torch.tensor([raw_angle], dtype=torch.float64, device=device)
+            
+            # 연속 미분 가능 오차장 연산 수행 후 Python 스칼라 float로 안전하게 수집
+            opt_r1 = float(self.calibration.calibrate_bond_length(t_center, t_side1, t_r1).item())
+            opt_r2 = float(self.calibration.calibrate_bond_length(t_center, t_side2, t_r2).item())
+            # 📌 교정 완료: t_r2 변수 오타를 정석 t_angle로 동기화 변환
+            opt_angle = float(self.calibration.calibrate_bond_angle(t_center, t_side1, t_side2, t_angle, t_b1, t_b2).item())
+            
+        else:
+            # 기존 NumPy 및 정적 도메인 규칙 기반 파이프라인 우회 (Bypass)
+            opt_r1 = self.calibration.calibrate_bond_length(center_z, side1_z, raw_r1)
+            opt_r2 = self.calibration.calibrate_bond_length(center_z, side2_z, raw_r2)
+            opt_angle = self.calibration.calibrate_bond_angle(center_z, side1_z, side2_z, raw_angle, nu_b1=nu_b1, nu_b2=nu_b2)
+
         return [opt_r1, opt_r2], opt_angle
+
 
     def export_to_xyz(self, molecule_name: str, elements: list[int], 
                       lengths: list[float], angle_deg: float, filename: str = None) -> str:
@@ -180,5 +205,3 @@ if __name__ == "__main__":
     print("." * 50)
     print("\n🎉 모든 시뮬레이션 인프라 및 V24_ext 벤치마크 파이프라인이 정식 코어로 정상 종료되었습니다.")
     print("=" * 80)
-
-
