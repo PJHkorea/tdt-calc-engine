@@ -281,7 +281,7 @@ $$
 
 By replacing empirical bounding partitions with the topological $SO(2)$ rotation kernel, the computational engine operates over a seamless, differentiable phase domain. The framework bypasses artificial local saddles, driving the structural screening pipeline precisely into the global energy minimum valley.
 
-## 6. Hybrid Physics-Informed Differentiable Neural Calibration Architecture (TDT v24_ext)
+## 6. Hybrid Physics-Informed Differentiable Neural Calibration Architecture (calibrator_nn.py)
 
 To eliminate the local geometric convergence traps, structural artifacts, and numerical optimization singularities manifested by purely algebraic solvers, we introduce an end-to-end differentiable neural-physical coupling layer. This architecture maps raw multi-body configurations onto a continuous, backpropagation-preserving coordinate manifold without structural gradient truncation.
 
