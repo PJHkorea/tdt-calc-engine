@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-#from tdt_engine.core import TDTEngineCore
+from tdt_engine.core import TDTEngineCore
 
 class TDTManifoldSolver:
     """
@@ -269,7 +269,9 @@ class TDTManifoldSolver:
 
             # [수정 완료] AGENT_PROMPT_v2 Section 4 준수: 반각 파울리 장벽(sin^2(theta/2)) 적용으로 180도 트랩 제거
             half_sin_sq = torch.sin(0.5 * theta_current) ** 2
-            pauli_geometrical_barrier = ((a_A + a_B) * self.alpha * self.omega_1) / (half_sin_sq + 1e-9)
+            pauli_geometrical_barrier = ((a_A + a_B) * self.alpha * self.omega_1) * torch.exp(-theta_current / 0.4) / (theta_current + 1e-4)
+
+
             
             # 매듭 탈조 최종 역전파 통합 비용 식 실행
             loss = dimensionless_space_residual + dimensionless_angle_residual * self_consistent_coupling + pauli_geometrical_barrier
@@ -291,9 +293,11 @@ class TDTManifoldSolver:
                     x.copy_(x * torch.cos(lr_riemannian * norm_d) + 
                             (direction / norm_d) * torch.sin(lr_riemannian * norm_d))
                     
+        # [수정 2] 루프 종료 후: 인위적 clamp 대신 SO(2) 원형 대칭 최단 호(0 ~ pi) 접기
         final_theta = torch.atan2(x[1], x[0])
-        if final_theta < 0:
-            final_theta = final_theta + 2.0 * torch.pi
+        final_theta = torch.where(final_theta < 0.0, final_theta + 2.0 * torch.pi, final_theta)
+        final_theta = torch.where(final_theta > torch.pi, 2.0 * torch.pi - final_theta, final_theta)
+
             
         return final_theta
 
