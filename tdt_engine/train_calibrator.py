@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tdt_engine.core import TDTEngineCore
-from tdt_engine.solvers import TDTManifoldSolver
-from tdt_engine.calibrator_nn import TDTNeuralCalibrator
+from tdt_engine.solvers_v2 import TDTManifoldSolver
+from tdt_engine.calibrator_nn_v2 import TDTNeuralCalibrator
+
 
 import torch
 
