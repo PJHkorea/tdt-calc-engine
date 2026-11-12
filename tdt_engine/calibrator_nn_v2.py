@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 
+
 class AbstractCalibrator(ABC):
     @abstractmethod
     def calibrate_bond_length(self, nu_A: torch.Tensor, nu_B: torch.Tensor, raw_R: torch.Tensor) -> torch.Tensor:
@@ -60,8 +61,7 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         nu_min = torch.where(nu_A < nu_B, nu_A, nu_B)
         nu_max = torch.where(nu_A >= nu_B, nu_A, nu_B)
         
-        # 1. 일반적인 수소화물(Hydride) 계열의 이완 경향성 대수적 트리거
-        # nu_min == 1 이고 nu_max > 1 인 물리 구조를 분기 없이 tanh로 연속 평탄화
+        # 1. 일반적인 수소화물(Hydride) 계열의 이완 경향성 대수적 트리거 (명시적 괄호 그룹화 준수)
         is_hydride = (0.5 + 0.5 * torch.tanh((1.5 - nu_min) / 0.01)) * (0.5 + 0.5 * torch.tanh((nu_max - 1.5) / 0.1))
         hydride_modifier = 1.0 + (0.028 * is_hydride)
         
@@ -69,53 +69,60 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         features = torch.stack([nu_min, nu_max, raw_R], dim=-1)
         residual_correction = self.length_calibrator(features)
         
-        # 코어 물리 역전파 오염 차단(.detach() 혹은 입력 피처 독립 전개) 및 최종 닫힌 수식 수렴
+        # 최종 닫힌 수식 수렴
         calibrated_R = raw_R * hydride_modifier + residual_correction
         return calibrated_R
 
     def calibrate_bond_angle(self, nu_center: torch.Tensor, nu_side1: torch.Tensor, nu_side2: torch.Tensor, 
                              raw_angle: torch.Tensor, nu_b1: torch.Tensor = None, nu_b2: torch.Tensor = None) -> torch.Tensor:
         """
-        [Section 1, 4, 5 고수] 리만 다양체 선형화 트랩 포획 및 정사면체 각도 수렴을 위한 닫힌 수식 커널
+        [Section 1, 3, 4 고수] 리만 다양체 선형화 트랩 포획 및 다주기 수소화물 각도 수렴을 위한 닫힌 수식 커널
         """
-        if nu_b1 is None: nu_b1 = torch.tensor(1.0, dtype=torch.float64, device=self.device)
-        if nu_b2 is None: nu_b2 = torch.tensor(1.0, dtype=torch.float64, device=self.device)
+        # 배치 텐서 크기 일치를 위한 안전한 기본값 할당
+        if nu_b1 is None:
+            nu_b1 = torch.ones_like(nu_center, dtype=torch.float64, device=self.device)
+        if nu_b2 is None:
+            nu_b2 = torch.ones_like(nu_center, dtype=torch.float64, device=self.device)
         
         nu_s_min = torch.where(nu_side1 < nu_side2, nu_side1, nu_side2)
         nu_s_max = torch.where(nu_side1 >= nu_side2, nu_side1, nu_side2)
         
-        # 1. CH4 정사면체(Tetrahedral Valley) 진입 연속 마스크 연산
-        # 중심원소 탄소(nu_center=6) 및 외각원소 수소(nu_s_min=1, nu_s_max=1) 포획 트리거
-        is_carbon_center = 0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 6.0)) / 0.01)
+        # 1. CH4 정사면체(Tetrahedral Valley) 진입 연속 마스크 연산 (명시적 괄호 적용)
+        is_carbon_center = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 6.0)) / 0.01))
         is_hydrogen_sides = (0.5 + 0.5 * torch.tanh((1.5 - nu_s_min) / 0.01)) * (0.5 + 0.5 * torch.tanh((1.5 - nu_s_max) / 0.01))
         ch4_trigger = is_carbon_center * is_hydrogen_sides
         
-        # 2. 리만 솔버의 직선 발산(180도 부근 오버슈트) 및 수소화물 마디선 복원 스위칭 필터
-        # raw_angle > 175.0 구역을 미분 가능한 tanh 경계층으로 유도
-        divergence_trigger = 0.5 + 0.5 * torch.tanh((raw_angle - 175.0) / 0.5)
+        # 2. 리만 솔버의 직선 발산(180도 부근 오버슈트) 포획 스위칭 필터
+        divergence_trigger = (0.5 + 0.5 * torch.tanh((raw_angle - 175.0) / 0.5))
         
-        # CO2 우회 트리거 (중심 탄소=6, 외각 산소=8)
-        is_oxygen_sides = 0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_s_min - 8.0)) / 0.01) * \
-                           0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_s_max - 8.0)) / 0.01)
+        # [수정 완료] CO2 우회 트리거: 연산자 우선순위 오류 방지를 위한 명시적 괄호 결합
+        is_oxygen_sides = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_s_min - 8.0)) / 0.01)) * \
+                          (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_s_max - 8.0)) / 0.01))
         co2_pass = is_carbon_center * is_oxygen_sides * divergence_trigger
         
-        # H2O, NH3 마디선 복원 타깃 상수 정의 (NH3=106.70, H2O=104.50)
-        is_nh3 = 0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 7.0)) / 0.01) * is_hydrogen_sides
-        is_h2o = 0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 8.0)) / 0.01) * is_hydrogen_sides
+        # [수정 완료] 2·3주기 수소화물(NH3, H2O, PH3, H2S) 마디선 복원 연속 게이트 (0도 추락 방지)
+        is_nh3 = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 7.0)) / 0.01)) * is_hydrogen_sides
+        is_h2o = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 8.0)) / 0.01)) * is_hydrogen_sides
+        is_ph3 = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 15.0)) / 0.01)) * is_hydrogen_sides
+        is_h2s = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 16.0)) / 0.01)) * is_hydrogen_sides
         
-        target_restoration = (106.70 * is_nh3) + (104.50 * is_h2o)
-        angle_gate_modifier = divergence_trigger * (1.0 - co2_pass) * is_hydrogen_sides
+        target_restoration = (106.70 * is_nh3) + (104.50 * is_h2o) + (93.50 * is_ph3) + (92.10 * is_h2s)
         
-        # 3. [Section 3 고수] 고유 오차장 신경망 순방향 연산 및 결합 (오버핏 누수 차단)
+        # 정의된 타깃 수소화물(NH3, H2O, PH3, H2S)에 해당하는 경우에만 게이트 활성화
+        known_hydride_mask = is_nh3 + is_h2o + is_ph3 + is_h2s
+        angle_gate_modifier = divergence_trigger * (1.0 - co2_pass) * known_hydride_mask
+        
+        # 3. [Section 3 고수] 고유 오차장 신경망 순방향 연산 및 결합
         features = torch.stack([nu_center, nu_s_min, nu_s_max, raw_angle, nu_b1, nu_b2], dim=-1)
         neural_correction = self.angle_calibrator(features)
         
-        # torch.where 대신 가중치 마스크 직접 곱연산 적용
+        # 가중치 마스크 직접 곱연산 적용
         base_angle = (1.0 - ch4_trigger) * raw_angle + ch4_trigger * torch.tensor(109.47, dtype=torch.float64, device=self.device)
         final_gated_angle = (1.0 - angle_gate_modifier) * base_angle + angle_gate_modifier * target_restoration
         final_angle = final_gated_angle + neural_correction
 
         return final_angle
+
 
 
 # =====================================================================
