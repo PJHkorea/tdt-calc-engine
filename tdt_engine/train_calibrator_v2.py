@@ -1,9 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-#from tdt_engine.core import TDTEngineCore
-#from tdt_engine.solvers import TDTManifoldSolver
-#from tdt_engine.calibrator_nn import TDTNeuralCalibrator
+from tdt_engine.core import TDTEngineCore
+from tdt_engine.solvers_v2 import TDTManifoldSolver
+from tdt_engine.calibrator_nn_v2 import TDTNeuralCalibrator
+
+
+
 
 
 def load_first_principles_dataset(solver: TDTManifoldSolver, device: str = 'cpu'):
@@ -106,7 +109,7 @@ def configure_isolated_optimizer(calibrator: TDTNeuralCalibrator):
         trainable_params = [p for p in calibrator.parameters() if p.requires_grad]
         
     # 3. 도메인 분리형 전선 바인딩 집행 (중복 임포트 제거 후 전역 optim 객체 호출)
-    optimizer = optim.Adam(trainable_params, lr=0.001)
+    optimizer = optim.Adam(trainable_params, lr=0.01)
     
     print(f"🔒 [STAGE 2] 가중치 독립성 제어 및 옵티마이저 도메인 격리 완료. (학습 파라미터: {len(trainable_params)}개 텐서군 결착)")
     return optimizer
