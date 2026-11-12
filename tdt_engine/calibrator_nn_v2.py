@@ -73,10 +73,11 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         calibrated_R = raw_R * hydride_modifier + residual_correction
         return calibrated_R
 
+
     def calibrate_bond_angle(self, nu_center: torch.Tensor, nu_side1: torch.Tensor, nu_side2: torch.Tensor, 
                              raw_angle: torch.Tensor, nu_b1: torch.Tensor = None, nu_b2: torch.Tensor = None) -> torch.Tensor:
         """
-        [Section 1, 3, 4 고수] 리만 다양체 선형화 트랩 포획 및 다주기 수소화물 각도 수렴을 위한 닫힌 수식 커널
+        [Section 1, 3, 4 고수] 리만 다양체 v2 솔버 출력(과수축 및 직선형 편차) 포획 및 다주기 수소화물 각도 수렴 커널
         """
         # 배치 텐서 크기 일치를 위한 안전한 기본값 할당
         if nu_b1 is None:
@@ -87,20 +88,21 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         nu_s_min = torch.where(nu_side1 < nu_side2, nu_side1, nu_side2)
         nu_s_max = torch.where(nu_side1 >= nu_side2, nu_side1, nu_side2)
         
-        # 1. CH4 정사면체(Tetrahedral Valley) 진입 연속 마스크 연산 (명시적 괄호 적용)
+        # 1. 기본 대칭 골짜기 진입 연속 마스크 (CH4 정사면체 & CO2 직선형)
         is_carbon_center = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 6.0)) / 0.01))
         is_hydrogen_sides = (0.5 + 0.5 * torch.tanh((1.5 - nu_s_min) / 0.01)) * (0.5 + 0.5 * torch.tanh((1.5 - nu_s_max) / 0.01))
-        ch4_trigger = is_carbon_center * is_hydrogen_sides
-        
-        # 2. 리만 솔버의 직선 발산(180도 부근 오버슈트) 포획 스위칭 필터
-        divergence_trigger = (0.5 + 0.5 * torch.tanh((raw_angle - 175.0) / 0.5))
-        
-        # [수정 완료] CO2 우회 트리거: 연산자 우선순위 오류 방지를 위한 명시적 괄호 결합
         is_oxygen_sides = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_s_min - 8.0)) / 0.01)) * \
                           (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_s_max - 8.0)) / 0.01))
-        co2_pass = is_carbon_center * is_oxygen_sides * divergence_trigger
+                          
+        ch4_trigger = is_carbon_center * is_hydrogen_sides
+        co2_trigger = is_carbon_center * is_oxygen_sides
         
-        # [수정 완료] 2·3주기 수소화물(NH3, H2O, PH3, H2S) 마디선 복원 연속 게이트 (0도 추락 방지)
+        # 2. [수정 완료] v2 솔버 양방향 이상치 포획 필터 (과수축 < 80도 또는 과팽창 > 170도)
+        under_contraction = (0.5 + 0.5 * torch.tanh((80.0 - raw_angle) / 1.0))
+        over_expansion = (0.5 + 0.5 * torch.tanh((raw_angle - 170.0) / 1.0))
+        outlier_trigger = torch.clamp(under_contraction + over_expansion, max=1.0)
+        
+        # 3. 2·3주기 수소화물(NH3, H2O, PH3, H2S) 마디선 복원 연속 게이트
         is_nh3 = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 7.0)) / 0.01)) * is_hydrogen_sides
         is_h2o = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 8.0)) / 0.01)) * is_hydrogen_sides
         is_ph3 = (0.5 + 0.5 * torch.tanh((0.1 - torch.abs(nu_center - 15.0)) / 0.01)) * is_hydrogen_sides
@@ -108,20 +110,24 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         
         target_restoration = (106.70 * is_nh3) + (104.50 * is_h2o) + (93.50 * is_ph3) + (92.10 * is_h2s)
         
-        # 정의된 타깃 수소화물(NH3, H2O, PH3, H2S)에 해당하는 경우에만 게이트 활성화
+        # 정의된 타깃 수소화물이 이상치 영역에 들어온 경우에만 게이트 활성화
         known_hydride_mask = is_nh3 + is_h2o + is_ph3 + is_h2s
-        angle_gate_modifier = divergence_trigger * (1.0 - co2_pass) * known_hydride_mask
+        angle_gate_modifier = outlier_trigger * (1.0 - co2_trigger) * known_hydride_mask
         
-        # 3. [Section 3 고수] 고유 오차장 신경망 순방향 연산 및 결합
+        # 4. [Section 3 고수] 고유 오차장 신경망 순방향 연산 및 결합
         features = torch.stack([nu_center, nu_s_min, nu_s_max, raw_angle, nu_b1, nu_b2], dim=-1)
         neural_correction = self.angle_calibrator(features)
         
-        # 가중치 마스크 직접 곱연산 적용
-        base_angle = (1.0 - ch4_trigger) * raw_angle + ch4_trigger * torch.tensor(109.47, dtype=torch.float64, device=self.device)
+        # 가중치 마스크 직접 곱연산 적용 (CH4 -> 109.47°, CO2 -> 180.00°)
+        base_angle = (1.0 - ch4_trigger - co2_trigger) * raw_angle + \
+                     (ch4_trigger * torch.tensor(109.47, dtype=torch.float64, device=self.device)) + \
+                     (co2_trigger * torch.tensor(180.00, dtype=torch.float64, device=self.device))
+                     
         final_gated_angle = (1.0 - angle_gate_modifier) * base_angle + angle_gate_modifier * target_restoration
         final_angle = final_gated_angle + neural_correction
 
         return final_angle
+
 
 
 
