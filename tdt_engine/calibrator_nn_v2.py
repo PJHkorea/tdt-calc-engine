@@ -141,18 +141,27 @@ if __name__ == "__main__":
     nu_B = torch.tensor([3.0, 8.0, 17.0], dtype=torch.float64)
     raw_R = torch.tensor([0.9476, 1.3928, 1.3767], dtype=torch.float64, requires_grad=True)
     
-    # [길이 검증] 단일 루프 배치 통과
-    calibrated_lengths = calibrator.calibrate_bond_length(nu_A, nu_B, raw_R)
-    
-    # [그라디언트 테스트] 역전파 역량 스캔 (Section 6-4 검증 루틴 실행)
-    loss = torch.sum((calibrated_lengths - torch.tensor([1.5959, 1.1283, 1.4152], dtype=torch.float64)) ** 2)
-    loss.backward()
-    
-    print(" ▶ [SUCCESS] 1차 결합 길이 배치 연산 텐서 그래프 흐름 완료.")
-    print( f" ▶ 연산 잔차 그래프 미분 버퍼 스캔 값 (raw_R.grad): \n   {raw_R.grad}")
+    # =====================================================================
+    # [2차 각도 검증] 4대 물리 게이트 배치(CH4, CO2, H2O, H2S) 동시 주입
+    # =====================================================================
+    # 순서: [CH4(6,1,1), CO2(6,8,8), H2O(8,1,1), H2S(16,1,1)]
+    nu_center = torch.tensor([6.0, 6.0, 8.0, 16.0], dtype=torch.float64)
+    nu_side1  = torch.tensor([1.0, 8.0, 1.0, 1.0], dtype=torch.float64)
+    nu_side2  = torch.tensor([1.0, 8.0, 1.0, 1.0], dtype=torch.float64)
+    raw_angle = torch.tensor([115.0, 179.90, 179.90, 179.94], dtype=torch.float64, requires_grad=True)
+
+    calibrated_angles = calibrator.calibrate_bond_angle(nu_center, nu_side1, nu_side2, raw_angle)
+    target_angles = torch.tensor([109.47, 180.00, 104.50, 92.10], dtype=torch.float64)
+
+    angle_loss = torch.sum((calibrated_angles - target_angles) ** 2)
+    angle_loss.backward()
+
+    print(" ▶ [SUCCESS] 2차 결합 각도 배치 연산 텐서 그래프 흐름 완료.")
+    print(f" ▶ 보정된 결합 각도 출력값: \n   {calibrated_angles.detach()}")
+    print(f" ▶ 각도 잔차 그래프 미분 버퍼 스캔 값 (raw_angle.grad): \n   {raw_angle.grad}")
     print("-" * 80)
-    if raw_R.grad is not None and not torch.isnan(raw_R.grad).any():
-        print(" 🎉 [GRADIENT HIGHWAY OPEN] if-else 단절 없이 역전파 그라디언트가 완벽히 보존되었습니다.")
+    if raw_angle.grad is not None and not torch.isnan(raw_angle.grad).any():
+        print(" 🎉 [ANGLE GRADIENT HIGHWAY OPEN] 물리 게이트 역전파 그라디언트 보존.")
     else:
-        print(" ❌ [GRAPH DETACHED] 연산 전선 내에 그래프가 끊겼습니다.")
+        print(" ❌ [ANGLE GRAPH DETACHED] 각도 연산 그래프가 단절되었습니다.")
     print("═" * 80)
