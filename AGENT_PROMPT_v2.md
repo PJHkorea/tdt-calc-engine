@@ -32,7 +32,7 @@ This document provides absolute behavioral, mathematical, and architectural cons
 ## 5. Strict Cheminformatics & SMILES Graph Generation Rules
 *   **Graph Symmetrical Sincerity:** When translating geometric vectors or partition function outputs into SMILES strings, the AI must enforce absolute syntax integrity. Every ring closure digit (e.g., `c1...n1`) must maintain strict structural pairing symmetry.
 *   **Valency Guardrails:** Never generate hypervalent or chemically impossible atomic states (e.g., a 5-bonded Nitrogen within a pyrimidine ring core).
-*   **Localized Scope Isolation:** If a structural axis 비틀림 strain or side-chain collision occurs, the AI must resolve steric clashes via explicit, balanced parenthetical localized branching `()`, preserving the exact cheminformatics vector formats compatible with RDKit pipelines and XYZ exporters.
+*   **Localized Scope Isolation:** If a structural axis torsional strain or side-chain collision occurs, the AI must resolve steric clashes via explicit, balanced parenthetical localized branching `()`, preserving the exact cheminformatics vector formats compatible with RDKit pipelines and XYZ exporters.
 
 ---
 
