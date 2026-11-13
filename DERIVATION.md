@@ -1,6 +1,8 @@
-# Mathematical Derivation of the Self-Consistent Dimensional Euclidean Well Potential (TDT v24)
+# Computational Mathematization for Differentiable Programming
 
-This document provides the formal mathematical derivation of the First-Principles framework utilized in **TDTUltimateEngineV23**. The entire geometric spectrum of molecular architectures is derived strictly from three arithmetic invariants without free empirical fitting parameters.
+## Mathematical Derivation of the Self-Consistent Dimensional Euclidean Well Potential (tdt_engine)
+
+This document provides the formal mathematical derivation of the First-Principles framework utilized in **tdt_engine**. The entire geometric spectrum of molecular architectures is derived strictly from three arithmetic invariants without free empirical fitting parameters.
 
 ## 1. Fundamental Arithmetic Invariants and Topological Space
 
