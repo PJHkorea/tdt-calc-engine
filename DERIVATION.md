@@ -284,7 +284,7 @@ This projection ensures that the search direction remains purely tangential, neu
 
 ### 5.2 Geodesic Rotation Retraction Engine
 
-To execute the gradient descent sequence directly along the intrinsic geometric curve (geodesic) of the circular manifold without leaving the constraint boundary $\|\mathbf{x}\|_2 = 1$, a trigonometric mapping retraction $\mathcal{R}_{\mathbf{x}}$ is implemented. Let $d_k = -\mathrm{Grad} \, f(\mathbf{x}_k)$ be the steepest descent vector in the tangent bundle, and let $\eta_k$ represent the geometric adaptive learning rate. The coordinate update rule satisfies:
+To execute the gradient descent sequence directly along the intrinsic geometric curve (geodesic) of the circular manifold without leaving the constraint boundary $\|\mathbf{x}\|_2 = 1$, a trigonometric mapping retraction $\mathcal{R}\_\{\mathbf{x}}$ is implemented. Let $d_k = -\mathrm{Grad} \, f(\mathbf{x}_k)$ be the steepest descent vector in the tangent bundle, and let $\eta_k$ represent the geometric adaptive learning rate. The coordinate update rule satisfies:
 
 $$
 \mathbf{x}_{k+1} = \mathcal{R}_{\mathbf{x}_k}(\eta_k d_k) = \mathbf{x}_k \cos\left(\eta_k \|d_k\|_2\right) + \frac{d_k}{\|d_k\|_2} \sin\left(\eta_k \|d_k\|_2\right)
