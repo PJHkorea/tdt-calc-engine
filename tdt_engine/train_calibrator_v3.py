@@ -145,7 +145,10 @@ def validate_production_pipeline(calibrator, solver: TDTManifoldSolver, device='
     print("=" * 80)
     
     calibrator.eval()
-    from tdt_engine.simulator import MaterialScreeningSimulator
+    try:
+        from tdt_engine.simulator import MaterialScreeningSimulator
+    except ImportError:
+        pass  # 코랩 노트북 환경에서는 상단 셀에 정의된 MaterialScreeningSimulator를 직접 사용
     
     core_for_sim = getattr(calibrator, "core", None)
     if core_for_sim is None:
@@ -187,6 +190,7 @@ def validate_production_pipeline(calibrator, solver: TDTManifoldSolver, device='
     print("\n🛰️  H2O 양자 계산 .xyz 기하 구조 스트림 최적화 및 덤프 검증 완료.")
     print(" 🎉 [SUCCESS] 모든 AI 가드레일 보정 인프라가 수리적으로 무결하게 종료되었습니다.")
     print("=" * 80)
+
 
 
 if __name__ == "__main__":
