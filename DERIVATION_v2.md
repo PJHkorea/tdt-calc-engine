@@ -124,7 +124,7 @@ $$
 ## 4. Hybrid UFF-VSEPR Knot Energy and Continuous Angular Alignment
 
 To eliminate piecewise conditional branching (`if-else`) in valence electron counting and resolve multi-ligand steric miscalculations 
-(e.g., $\text{CH}\_\4$, $\text{NH}\_\3$), the effective valence electron count $\nu_{\text{val}}$ of the central atom $\nu_C$ is derived smoothly via continuous shell gates:
+(e.g., $\text{CH}\_4$, $\text{NH}\_3$), the effective valence electron count $\nu_{\text{val}}$ of the central atom $\nu_C$ is derived smoothly via continuous shell gates:
 
 $$
 \Theta_{2}(\nu_C) = \frac{1}{2} + \frac{1}{2}\tanh\left(\frac{N(\nu_C) - 1.5}{0.1}\right), \qquad \Theta_{3}(\nu_C) = \frac{1}{2} + \frac{1}{2}\tanh\left(\frac{N(\nu_C) - 2.5}{0.1}\right)
@@ -160,7 +160,7 @@ $$
 \theta_{\text{target}} = \theta_{\text{VSEPR}} - \theta_{\text{shrunk}}
 $$
 
-To achieve full compatibility with the Riemannian $SO(2)$ circular manifold while preventing artificial over-contraction in linear molecules ($\text{CO}\_\2$), the angular bending energy $\Delta\_\{\text{UFF}}(\theta)$ adopts the standardized **Universal Force Field (UFF)** cosine harmonic expansion coupled with the self-consistent topological tension $\mathcal{C}\_\{\text{self}}$:
+To achieve full compatibility with the Riemannian $SO(2)$ circular manifold while preventing artificial over-contraction in linear molecules ($\text{CO}\_2$), the angular bending energy $\Delta\_\{\text{UFF}}(\theta)$ adopts the standardized **Universal Force Field (UFF)** cosine harmonic expansion coupled with the self-consistent topological tension $\mathcal{C}\_\{\text{self}}$:
 
 $$
 \Delta_{\text{UFF}}(\theta) = \frac{1 - \cos(\theta - \theta_{\text{target}})}{\sin^2(\theta_{\text{target}}) + \epsilon_{\text{lin}}}, \qquad \epsilon_{\text{lin}} = 0.05
@@ -196,7 +196,7 @@ $$
 
 ### 5.1 Batched Orthogonal Riemannian Gradient Derivation
 
-For each angular coordinate $\mathbf{x}\_i \in \mathbb{R}^2$, the unconstrained Euclidean gradient $\nabla\_\{\mathbf{x}\_i} f(\mathbf{X})$ contains normal components that violate the unit-circle constraint. To confine the optimization trajectory strictly to the tangent bundle $T\_\{\mathbf{X}}\mathcal{M}^B$, we apply the vectorized orthogonal projection operator $\mathcal{P}\_\{\mathbf{x}\_\i}$:
+For each angular coordinate $\mathbf{x}\_i \in \mathbb{R}^2$, the unconstrained Euclidean gradient $\nabla\_\{\mathbf{x}\_i} f(\mathbf{X})$ contains normal components that violate the unit-circle constraint. To confine the optimization trajectory strictly to the tangent bundle $T\_\{\mathbf{X}}\mathcal{M}^B$, we apply the vectorized orthogonal projection operator $\mathcal{P}\_\{\mathbf{x}\_i}$:
 
 $$
 \mathrm{Grad} \, f(\mathbf{x}_i) = \mathcal{P}_{\mathbf{x}_i}\left(\nabla_{\mathbf{x}_i} f(\mathbf{X})\right) = \left( \mathbf{I}_2 - \mathbf{x}_i \mathbf{x}_i^{T} \right) \nabla_{\mathbf{x}_i} f(\mathbf{X})
