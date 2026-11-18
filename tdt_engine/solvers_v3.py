@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-#from tdt_engine.core import TDTEngineCore
+from tdt_engine.core import TDTEngineCore
 
 class TDTManifoldSolver:
     def __init__(self, core_engine: TDTEngineCore = None, device: str = None):
@@ -91,48 +91,6 @@ class TDTManifoldSolver:
             return float(R_bond.detach().item()), float(a_A_mod.detach().item()), float(a_B_mod.detach().item())
         return R_bond, a_A_mod, a_B_mod
 
-
-    def _compute_angle_tensor(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0, n_lig=2.0, sigma_bond=None):
-        nu_c_t, nu_s1_t, nu_s2_t = self._to_tensor(nu_center), self._to_tensor(nu_side1), self._to_tensor(nu_side2)
-        nb1_t, nb2_t, n_lig_t = self._to_tensor(nu_b1), self._to_tensor(nu_b2), self._to_tensor(n_lig)
-
-        is_scalar = (nu_c_t.ndim == 0)
-        if is_scalar:
-            nu_c_t, nu_s1_t, nu_s2_t = nu_c_t.unsqueeze(0), nu_s1_t.unsqueeze(0), nu_s2_t.unsqueeze(0)
-            nb1_t, nb2_t, n_lig_t = nb1_t.unsqueeze(0), nb2_t.unsqueeze(0), n_lig_t.unsqueeze(0)
-
-        B = nu_c_t.shape
-        sigma_bond_t = (nb1_t + nb2_t) if sigma_bond is None else self._to_tensor(sigma_bond)
-        if sigma_bond_t.ndim == 0:
-            sigma_bond_t = sigma_bond_t.expand(B)
-
-        eps = 1e-8
-        R_A, a_A, _ = self._compute_bond_length_tensor(nu_c_t, nu_s1_t, nb1_t)
-        R_B, a_B, _ = self._compute_bond_length_tensor(nu_c_t, nu_s2_t, nb2_t)
-
-        rho_C, a_C_raw, _ = self.compute_topological_density_tensor(nu_c_t)
-        _, a_S1_raw, _ = self.compute_topological_density_tensor(nu_s1_t)
-        _, a_S2_raw, _ = self.compute_topological_density_tensor(nu_s2_t)
-
-        Phi_C = torch.clamp(1.0 - (a_C_raw / self.a0), min=1e-5)
-
-      
-        _, N_shell_cont = self.compute_automated_shell_tensor(nu_c_t)
-        theta_2 = 0.5 + 0.5 * torch.tanh((N_shell_cont - 1.5) / 0.1)
-        theta_3 = 0.5 + 0.5 * torch.tanh((N_shell_cont - 2.5) / 0.1)
-        valence_electrons = nu_c_t - 2.0 * theta_2 - 8.0 * theta_3
-
-        raw_lone_pair = (valence_electrons - sigma_bond_t) / 2.0
-        rho_LP = F.softplus(raw_lone_pair, beta=50.0)
-
-        S_eff = n_lig_t + rho_LP
-        theta_linear = torch.pi
-        theta_trig = 2.0 * torch.pi / 3.0
-        theta_tet = torch.tensor(109.4712 * torch.pi / 180.0, dtype=torch.float64, device=self.device)
-
-        theta_vsepr = theta_linear \
-            - (theta_linear - theta_trig) * (0.5 + 0.5 * torch.tanh((S_eff - 2.5) / 0.15)) \
-            - (theta_trig - theta_tet) * (0.5 + 0.5 * torch.tanh((S_eff - 3.5) / 0.15))
 
 
     def _compute_angle_tensor(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0, n_lig=2.0, sigma_bond=None):
