@@ -55,6 +55,15 @@ $$
 
 ---
 
+* **Branch-Free Read-Only Tensor Buffer Lookup ($\nu \in \{1, \dots, 86\}$):**
+To retrieve standardized empirical baselines ( $r_{\text{cov}}(\nu)$ and $\chi_{\text{pauling}}(\nu)$ ) across batched atomic tensors without conditional branching or dictionary lookups, constants are registered as immutable read-only lookup buffers ($\mathbf{T}\_{\text{cov}}, \mathbf{T}\_{\chi} \in \mathbb{R}^{87}$):
+
+$$
+r_{\text{cov}}(\nu) = \mathbf{T}_{\text{cov}}[\lfloor \nu \rfloor], \qquad \chi_{\text{pauling}}(\nu) = \mathbf{T}_{\chi}[\lfloor \nu \rfloor]
+$$
+
+---
+
 
 ## 3. Closed-Form Hybrid Bond Length Convergence and Metric Tensor Modifier
 
@@ -253,6 +262,17 @@ $$
 *(Note: Operating in logit-sigmoid space guarantees $\theta\_\{\text{calibrated}} \in (0, \pi)$ 
 
 strictly without hard clamping discontinuities, while reducing smoothly to $\theta\_\{\text{raw}}$ when $\mathcal{R}\_\{\text{ang}} \to 0$.)*
+
+---
+
+* **Numerical Boundary Stabilization ($\epsilon_{\text{logit}} = 10^{-6}$):**
+To prevent logarithmic singularities ( $\mathrm{logit}(0) \to -\infty$, $\mathrm{logit}(1) \to +\infty$) when $\theta_{\text{raw}} $ approaches $0$ or $\pi$ in linear triatomic systems (e.g., $\text{CO}_2$ , $\text{HCN}$) , the normalized angular ratio is smoothly bounded prior to logit transformation:
+
+$$
+p_{\text{raw}} = \mathrm{clamp}\left( \frac{\theta_{\text{raw}}}{\pi},\; \epsilon_{\text{logit}},\; 1.0 - \epsilon_{\text{logit}} \right), \qquad \theta_{\text{calibrated}} = \pi \cdot \sigma\left( \mathrm{logit}(p_{\text{raw}}) + \mathcal{R}_{\text{ang}}(\mathbf{v}_{\text{ang}}) \right)
+$$
+
+---
 
 ### 6.3 Scale-Unified Multi-Flux Objective and Pseudo-Force Guardrail
 
