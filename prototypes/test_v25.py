@@ -230,8 +230,9 @@ class TDTUltimateEngineV25(nn.Module):
         lr_riemannian = 0.02
 
         T_bg = torch.exp(-Phi_side_mod / gamma_scaler)
-        # 2. _compute_angle_tensor 내부: C_self 균형 보강 및 단거리 파울리 장벽 강화
+        # 1. 루프 진입 전 C_self 정의부
         C_self = 10.0 * (1.0 / self.alpha) * (rho_C ** (1.0 - gamma_scaler)) * (self.omega_1 / (4.0 * torch.pi)) * (gamma_scaler ** 2) * T_bg
+
 
 
         for _ in range(800):
