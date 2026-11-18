@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
-
+import torch.nn.functional as F
+from tdt_engine.core_v2 import TDTEngineCore
 
 class AbstractCalibrator(ABC):
     @abstractmethod
@@ -38,8 +39,7 @@ class NeuralResidualField(nn.Module):
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         return self.net(features).squeeze(-1)
 
-import torch.nn.functional as F
-from tdt_engine.core_v2 import TDTEngineCore
+
 
 class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
     def __init__(self, core_engine=None, device: str = 'cpu') -> None:
@@ -115,9 +115,11 @@ class TDTNeuralCalibrator(AbstractCalibrator, nn.Module):
         rho_LP = F.softplus((valence_electrons - sigma_bond) / 2.0, beta=50.0)
 
         # 2. 라디안(rad) 변환 및 8차원 물리 피처 구성
-        raw_rad = raw_angle if return_radians else torch.deg2rad(raw_angle)
+        # 2. 입력은 항상 Degree(°) 단위로 받아 Radian(rad)으로 안전 변환
+        raw_rad = torch.deg2rad(raw_angle)
         features = torch.stack([nu_center, nu_s_min, nu_s_max, nu_b1, nu_b2, rho_C, rho_LP, raw_rad], dim=-1)
         neural_residual = self.angle_calibrator(features)
+
 
         # 3. 경계 안정화된 Logit-Sigmoid 투영 (eps_logit = 1e-6)
         eps_logit = 1e-6
