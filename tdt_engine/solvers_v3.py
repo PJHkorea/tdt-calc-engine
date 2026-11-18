@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from tdt_engine.core import TDTEngineCore
+from tdt_engine.core_v2 import TDTEngineCore
 
 class TDTManifoldSolver:
     def __init__(self, core_engine: TDTEngineCore = None, device: str = None):
@@ -219,7 +219,7 @@ class TDTManifoldSolver:
                 X.copy_(X * torch.cos(lr_riemannian * norm_d) + (direction / (norm_d + 1e-12)) * torch.sin(lr_riemannian * norm_d))
 
         # 6. Branch-free Geodesic Folding: arccos(x_1)로 [0, pi] 물리 각도 즉시 복원
-        final_theta_rad = torch.acos(torch.clamp(X[:, 0].detach(), min=-1.0 + 1e-7, max=1.0 - 1e-7))
+        final_theta_rad = torch.acos(torch.clamp(X[:, 0], min=-1.0 + 1e-7, max=1.0 - 1e-7))
         return final_theta_rad[0] if is_scalar else final_theta_rad
 
     def compute_angle(self, nu_center, nu_side1, nu_side2, nu_b1=1.0, nu_b2=1.0, n_lig=2.0, sigma_bond=None):
