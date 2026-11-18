@@ -255,7 +255,7 @@ class TDTUltimateEngineV25(nn.Module):
             # 유카와-파울리 단거리 척력 장벽
             half_sin_sq = torch.sin(0.5 * theta_cur) ** 2
             # 3. _compute_angle_tensor 루프 내부: OF2 예각 붕괴 차단
-            pauli_barrier = (a_A + a_B) * self.alpha * self.omega_1 * torch.exp(-theta_cur / 0.4) / (theta_cur + 1e-4)
+            pauli_barrier = (a_A + a_B) * self.alpha * self.omega_1 * torch.exp(-theta_cur / 0.4) / (half_sin_sq + 1e-6)
 
 
             loss_vec = delta_space + delta_uff * C_self + pauli_barrier
