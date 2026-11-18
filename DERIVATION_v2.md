@@ -187,7 +187,7 @@ $$
 
 ### 5.1 Batched Orthogonal Riemannian Gradient Derivation
 
-For each angular coordinate $\mathbf{x}\_\i \in \mathbb{R}^2$, the unconstrained Euclidean gradient $\nabla\_\{\mathbf{x}\_\i} f(\mathbf{X})$ contains normal components that violate the unit-circle constraint. To confine the optimization trajectory strictly to the tangent bundle $T\_\{\mathbf{X}}\mathcal{M}^B$, we apply the vectorized orthogonal projection operator $\mathcal{P}\_\{\mathbf{x}\_\i}$:
+For each angular coordinate $\mathbf{x}\_i \in \mathbb{R}^2$, the unconstrained Euclidean gradient $\nabla\_\{\mathbf{x}\_i} f(\mathbf{X})$ contains normal components that violate the unit-circle constraint. To confine the optimization trajectory strictly to the tangent bundle $T\_\{\mathbf{X}}\mathcal{M}^B$, we apply the vectorized orthogonal projection operator $\mathcal{P}\_\{\mathbf{x}\_\i}$:
 
 $$
 \mathrm{Grad} \, f(\mathbf{x}_i) = \mathcal{P}_{\mathbf{x}_i}\left(\nabla_{\mathbf{x}_i} f(\mathbf{X})\right) = \left( \mathbf{I}_2 - \mathbf{x}_i \mathbf{x}_i^{T} \right) \nabla_{\mathbf{x}_i} f(\mathbf{X})
@@ -203,13 +203,13 @@ This tangential projection naturally modulates the metric tensor $g\_\{\mu\nu}$,
 
 ### 5.2 Numerically Stabilized Geodesic Retraction and Branch-Free Folding
 
-To advance all $B$ angular vectors concurrently along the exact circular geodesics without drifting off $\|\mathbf{x}\_\i\|\_\2 = 1$, let $\mathbf{d}\_\{i,k} = -\mathrm{Grad} \, f(\mathbf{x}\_\{i,k})$ be the tangential descent direction and $\eta\_\k$ be the adaptive step size. Introducing a numerical stabilizer $\epsilon = 10^{-12}$ prevents division-by-zero singularities at stationary points ($\|\mathbf{d}\_\{i,k}\|\_\2 \to 0$):
+To advance all $B$ angular vectors concurrently along the exact circular geodesics without drifting off $\|\mathbf{x}\_i\|\_2 = 1$, let $\mathbf{d}\_\{i,k} = -\mathrm{Grad} \, f(\mathbf{x}\_\{i,k})$ be the tangential descent direction and $\eta\_k$ be the adaptive step size. Introducing a numerical stabilizer $\epsilon = 10^{-12}$ prevents division-by-zero singularities at stationary points ($\|\mathbf{d}\_\{i,k}\|\_2 \to 0$):
 
 $$
 \mathbf{x}_{i,k+1} = \mathcal{R}_{\mathbf{x}_{i,k}}(\eta_k \mathbf{d}_{i,k}) = \mathbf{x}_{i,k} \cos\left(\eta_k \|\mathbf{d}_{i,k}\|_2\right) + \frac{\mathbf{d}_{i,k}}{\|\mathbf{d}_{i,k}\|_2 + \epsilon} \sin\left(\eta_k \|\mathbf{d}_{i,k}\|_2\right)
 $$
 
-Upon vectorized convergence ($\max_i \|\mathrm{Grad} \, f(\mathbf{x}\_\i)\|\_\2 < 10^{-7}$), rather than relying on piecewise conditional branches (`if-else`) for lower-semicircle trajectories, we exploit the intrinsic cosine symmetry of the unit circle ($\cos(2\pi - \theta) = \cos\theta = x\_\{i,1}$) to recover the folded valence angle $\theta\_\{i,\text{final}} \in [0, \pi]$ in a single closed-form differentiable operation ($\epsilon\_\{\text{acos}} = 10^{-7}$):
+Upon vectorized convergence ($\max_i \|\mathrm{Grad} \, f(\mathbf{x}\_i)\|\_2 < 10^{-7}$), rather than relying on piecewise conditional branches (`if-else`) for lower-semicircle trajectories, we exploit the intrinsic cosine symmetry of the unit circle ($\cos(2\pi - \theta) = \cos\theta = x\_\{i,1}$) to recover the folded valence angle $\theta\_\{i,\text{final}} \in [0, \pi]$ in a single closed-form differentiable operation ($\epsilon\_\{\text{acos}} = 10^{-7}$):
 
 $$
 \theta_{i,\text{final}} = \arccos\left( \mathrm{clamp}\left(x_{i,1},\; -1.0 + \epsilon_{\text{acos}},\; 1.0 - \epsilon_{\text{acos}}\right) \right)
