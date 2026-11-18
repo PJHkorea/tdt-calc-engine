@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-#from tdt_engine.core_v2 import TDTEngineCore
-#from tdt_engine.solvers_v3 import TDTManifoldSolver
-#from tdt_engine.calibrator_nn_v3 import TDTNeuralCalibrator
+from tdt_engine.core_v2 import TDTEngineCore
+from tdt_engine.solvers_v3 import TDTManifoldSolver
+from tdt_engine.calibrator_nn_v3 import TDTNeuralCalibrator
 
 def load_first_principles_dataset(solver: TDTManifoldSolver, device: str = 'cpu'):
     print("🛰️ [STAGE 1] 실제 물리 솔버(v3) 기반 오차장(Error Field) 데이터셋 동적 추출...")
