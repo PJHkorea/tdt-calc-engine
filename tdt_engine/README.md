@@ -64,7 +64,7 @@ print(f"HI Closed-Form Bond Length: {calc_R:.4f} Å")  # 1.6629 Å (Obs: 1.6080 
 
 ## 🛡️ 개발 및 AI 에이전트 수칙 (`AGENT_PROMPT_v3.md` 준수)
 
-* **기저 코어 및 상수 테이블 동결 (`core_v2.py`):** 제1원칙 불변량($a_0, \omega_1, \alpha$)과 1~86번 표준 상수 버퍼($\mathbf{T}_{\text{cov}}, \mathbf{T}_{\chi}$)는 읽기 전용으로 보호하며 옵티마이저가 수정하지 않습니다.
+* **기저 코어 및 상수 테이블 동결 (`core_v2.py`):** 제1원칙 불변량($a_0, \omega_1, \alpha$)과 1~86번 표준 상수 버퍼($\mathbf{T}\_{\text{cov}}, \mathbf{T}\_{\chi}$)는 읽기 전용으로 보호하며 옵티마이저가 수정하지 않습니다.
 * **Branch-Free 연속 미분 연산 유지:** 물리 및 보정 루프 내 `if-else` 분기문을 전면 배제하고 `torch.tanh`, `F.softplus`, `torch.acos`, `torch.logit`만 사용합니다.
 * **Zero Lookup-Gate & 라디안 통일 손실:** 특정 분자 정답지 게이트 없이 5D/8D 물리 피처 기반 순수 잔차 학습을 수행하며, 길이($\text{\AA}^2$)와 각도($\text{rad}^2$) 손실을 자연 단위로 균형 학습합니다.
 
