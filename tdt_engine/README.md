@@ -11,8 +11,8 @@
   * `solvers_v3.py`: UFF-VSEPR 입체수(\(\mathcal{S}_{\text{eff}}\)) 및 `[B x 2]` 배치 리만 SO(2) 다양체 솔버
   * `calibrator_nn_v3.py`: 하드 게이트를 전면 제거한 물리 피처 기반 순수 잔차 + `Logit-Sigmoid` 보정기
   * `train_calibrator_v3.py`: 동적 오차장 추출, 라디안 통일 학습 및 `STAGE 1~5`(미학습 OOS 포함) 통합 파이프라인
-  * `simulator.py`: 의존성 주입(DI) 기반 최상위 오케스트레이터 및 양자 계산용 `.xyz` 좌표 출력기
-* **`legacy/` 폴더:** 초기 결정론적 계산기(`calibrator.py`), `v1`/`v2` 솔버 및 보정기(`solvers.py`, `solvers_v2.py`, `calibrator_nn.py`, `calibrator_nn_v2.py`, `train_calibrator_v2.py`)
+  * `simulator_v2.py`: 의존성 주입(DI) 기반 최상위 오케스트레이터 및 양자 계산용 `.xyz` 좌표 출력기
+* **`legacy/` 폴더:** 초기 결정론적 계산기(`calibrator.py`), `v1`/`v2` 솔버 및 보정기(`solvers.py`, `solvers_v2.py`, `calibrator_nn.py`, `calibrator_nn_v2.py`, `train_calibrator_v2.py`) , 구버전 `simulator.py`
 
 ---
 
@@ -27,14 +27,14 @@
   python -m tdt_engine.solvers_v3               # UFF-VSEPR 및 [B=10] 배치 리만 솔버 검증
   python -m tdt_engine.calibrator_nn_v3         # 순수 잔차 + Logit-Sigmoid 역전파 검증
   python -m tdt_engine.train_calibrator_v3      # STAGE 1~5 학습 및 미학습(OOS) 일반화 검증
-  python -m tdt_engine.simulator                # 22종 분자 벤치마크 및 .xyz 스트림 출력
+  python -m tdt_engine.simulator_v2                # 22종 분자 벤치마크 및 .xyz 스트림 출력
   ```
 * **파이썬 코드 연동 예시:**
   ```python
   from tdt_engine.core_v2 import TDTEngineCore
   from tdt_engine.solvers_v3 import TDTManifoldSolver
   from tdt_engine.calibrator_nn_v3 import TDTNeuralCalibrator
-  from tdt_engine.simulator import MaterialScreeningSimulator
+  from tdt_engine.simulator_v2 import MaterialScreeningSimulator
 
   core = TDTEngineCore()
   solver = TDTManifoldSolver(core_engine=core)
