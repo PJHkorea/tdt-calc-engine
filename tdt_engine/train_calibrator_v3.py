@@ -264,6 +264,70 @@ def validate_production_pipeline(calibrator, solver: TDTManifoldSolver, device='
     print("=" * 80)
 
 
+def validate_out_of_sample_generalization(calibrator, solver: TDTManifoldSolver, device='cpu'):
+    print("\n🌐 [STAGE 5] 미학습(Out-of-Sample) 분자 일반화 성능 검증")
+    print("=" * 80)
+    calibrator.eval()
+
+    oos_lengths = [
+        ("LiH", 3.0, 1.0, 1.0, 1.5959),
+        ("LiF", 3.0, 9.0, 1.0, 1.5639),
+        ("BF",  5.0, 9.0, 1.3, 1.2626),
+        ("CH4", 6.0, 1.0, 1.0, 1.0870),
+        ("NH3", 7.0, 1.0, 1.0, 1.0170),
+        ("H2O", 8.0, 1.0, 1.0, 0.9584),
+        ("H2S", 16.0, 1.0, 1.0, 1.3356)
+    ]
+
+    print("📏 [OOS-1] 미학습 결합 길이 검증 (7 Cases)")
+    with torch.no_grad():
+        for name, za, zb, nb, obs in oos_lengths:
+            raw_r, _, _ = solver.compute_bond_length(za, zb, nu_bond=nb)
+            ta = torch.tensor([za], dtype=torch.float64, device=device)
+            tb = torch.tensor([zb], dtype=torch.float64, device=device)
+            tnb = torch.tensor([nb], dtype=torch.float64, device=device)
+            tr = torch.tensor([raw_r], dtype=torch.float64, device=device)
+            cal_r = float(calibrator.calibrate_bond_length(ta, tb, tr, nu_bond=tnb).item())
+            print(f" - {name:4s} | Raw: {raw_r:.4f} Å -> Cal: {cal_r:.4f} Å | Obs: {obs:.4f} Å (Err: {cal_r-obs:+.4f} Å)")
+
+
+    oos_angles = [
+        # (분자명, 중심, 외각1, 외각2, 차수1, 차수2, 리간드수, 총결합차수, 관측각도)
+        ("NF3",  7.0,  9.0, 9.0, 1.0, 1.0, 3.0, 3.0, 102.30),
+        ("OF2",  8.0,  9.0, 9.0, 1.0, 1.0, 2.0, 2.0, 103.30),
+        ("ClO2", 17.0, 8.0, 8.0, 1.5, 1.5, 2.0, 3.0, 111.00),
+        ("BF3",  5.0,  9.0, 9.0, 1.0, 1.0, 3.0, 3.0, 120.00)
+    ]
+    print("\n📐 [OOS-2] 미학습 결합 각도 검증 (4 Cases)")
+    for name, zc, zs1, zs2, nb1, nb2, n_lig, sig_b, obs in oos_angles:
+        # 1. 리만 다양체 솔버는 내부 미분을 사용하므로 no_grad() 바깥에서 실행
+        raw_ang = solver.compute_angle(
+            zc, zs1, zs2, nu_b1=nb1, nu_b2=nb2, n_lig=n_lig, sigma_bond=sig_b
+        )
+        # 2. 캘리브레이터 추론만 no_grad() 블록 안에서 수행
+        with torch.no_grad():
+            tc = torch.tensor([zc], dtype=torch.float64, device=device)
+            ts1 = torch.tensor([zs1], dtype=torch.float64, device=device)
+            ts2 = torch.tensor([zs2], dtype=torch.float64, device=device)
+            tb1 = torch.tensor([nb1], dtype=torch.float64, device=device)
+            tb2 = torch.tensor([nb2], dtype=torch.float64, device=device)
+            tsig = torch.tensor([sig_b], dtype=torch.float64, device=device)
+            tang = torch.tensor([raw_ang], dtype=torch.float64, device=device)
+
+            cal_ang = float(calibrator.calibrate_bond_angle(
+                tc, ts1, ts2, tang, nu_b1=tb1, nu_b2=tb2, sigma_bond=tsig, return_radians=False
+            ).item())
+
+        raw_err = abs(raw_ang - obs)
+        cal_err = abs(cal_ang - obs)
+        status = "✅ 개선" if cal_err < raw_err else "⚠️ 외삽한계"
+        print(f" - {name:4s} | Raw: {raw_ang:6.2f}° -> Cal: {cal_ang:6.2f}° | Obs: {obs:6.2f}° (Err: {cal_ang-obs:+6.2f}° | {status})")
+
+    print("=" * 80)
+
+
+
+
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"🚀 [INIT] 실행 연산 백엔드 장치 배정: {device.upper()}")
@@ -277,4 +341,5 @@ if __name__ == "__main__":
     optimizer = configure_isolated_optimizer(calibrator)
     execute_neural_training_loop(calibrator, optimizer, dataset, epochs=500)
     validate_production_pipeline(calibrator, solver=solver, device=device)
+    validate_out_of_sample_generalization(calibrator, solver=solver, device=device)
 
