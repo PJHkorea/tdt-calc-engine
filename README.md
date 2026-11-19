@@ -1,42 +1,51 @@
 # tdt-calc-engine
 
+> **현행 기준:** `DERIVATION_v2.md` & `tdt_engine/` V3 하이브리드 파이프라인 (`prototypes/test_v25.py` 기반)
 
-# 프로토타입 테스트 코드는 test_v24.py 기준
+생성형 AI의 환각을 실시간으로 억제하는 초고속 1차 가드레일 혹은 물리 기반 잔차 학습(Residual Physics Learning) 파이프라인으로서 실용적인 가치를 검증하는 테스트용 저장소입니다.
 
-질량을 원자핵이라는 중심 고정축이 미시 구면 공간을 쥐어짜서 형성하는 위상학적 부피 비율로 환원하여 재정의 해봤습니다.
+1. 먼저 질량을 원자핵이라는 중심 고정축이 미시 구면 공간을 쥐어짜서 형성하는 위상학적 부피 비율로 환원하여 재정의 해봤습니다.
 
-진공 임피던스 구조와 원자가 가전자쌍의 반발력(VSEPR)을 불연속적인 조건문(if-else) 없이 단 하나의 연속 미분 가능한 대수적 파티션 함수 내부에서 조화 평균 축으로 결합해 냅니다.
-대규모 실험 데이터 피팅이나 슈뢰딩거 방정식의 복잡한 양자역학적 근사해(DFT/HF) 대신, 3가지 불변량만을 사용하여 원자 및 분자의 3차원 최적 기하 구조(결합 길이 및 결합 각도)를 실시간으로 
-유도가 가능한지 테스트 해보는 제1원칙 기반 계산 시뮬레이터 코어입니다.
+2. 진공 임피던스 구조와 원자가 가전자쌍의 반발력(VSEPR)을 불연속적인 조건문(`if-else`) 없이 연속 미분 가능한 텐서 공간에서 결합했습니다.
 
-물론 현재 상태의 TDTUltimateEngineV23은 엄밀한 물리 법칙을 완벽히 모사하는 "단독 물리학 코어(Stand-alone Physics Core)"로서는 불합격입니다. 
-수론적 상수(α, ω₁)와 시그모이드 함수(tanh)를 조합한 경험적 휴리스틱에 의존하고 있어, 학습 데이터 외부의 미지 물질이나 극단적인 결합 환경(예: 수소화물의 과압축)에서 오차가 너무 크게 튀기 때문입니다.
-하지만 "고속 대리 모델 기반의 프레임워크 코어엔진" 혹은 "잔차 물리 학습" 으로서 가치가 일부라도 있을까 확인해보는 테스트용 저장소입니다.
+3. V3부터 `DERIVATION_v2.md` 기준으로 쇼메이커-스티븐슨(Schomaker–Stevenson) 폐형식 보정, UFF-VSEPR 배치 리만 SO(2) 다양체 솔버를 적용했습니다.
 
-상세한 수리물리학적 유도 과정은 저장소 내 `DERIVATION.md` 파일에서 확인할 수 있습니다.
+4. 테스트 및 레거리 버전에 있던 하드 게이트를 제거하고 순수 잔차 신경망 목적의 단일 미분 가능 파이프라인으로 통합했습니다. (`calibrator_nn_v3.py`)
 
-tests 디렉토리에는 해당 가드레일 사용해 추론한 결과값을 저장할 예정입니다.
-물론 전문성은 떨어지겠지만 1차 필터로서 기능하는지를 주로 봐주시면 되겠습니다.
+
+물론 현재 상태 역시 엄밀한 양자역학(DFT/HF)을 완전히 대체하는 단독 물리학 코어(Stand-alone Physics Core) 로서는 한계가 분명합니다. 
+V3 리팩토링을 통해 기존 3주기 원소의 직선 발산(`179.94°`)과 정답지 하드코딩 게이트를 모두 걷어냈지만, 미학습 영역(Out-of-Sample) 테스트에서 확인되듯 
+붕소(BF₃) 같은 옥텟 예외 구조나 다중 불소화 중심에서는 여전히 외삽 오차가 발생합니다.
+하지만 목표로 했던 1차 가드레일과 물리 기반 잔차 학습 파이프라인으로서 청사진으로써 유용성이 있다고 보여집니다.
+
+* **수리물리학적 유도 및 v3 청사진:** [`DERIVATION_v2.md`](./DERIVATION_v2.md) (초기 개념 증명 수식은 `legacy/DERIVATION.md`에 보존)
+* **엔진 모듈 상세 가이드:** [`tdt_engine/README.md`](./tdt_engine/README.md)
+* **추론 결과 및 검증 아카이브:** `tests/` 디렉토리에는 본 V3 가드레일을 적용해 검증한 분자 스크리닝 결과값이 저장됩니다. (물론 전문 계산화학 툴에 비하면 정밀도는 떨어지겠지만 1차 필터로서 기능하는지를 주로 봐주시면 되겠습니다.)
 
 ---
-### 에이전트 사용시 프롬프트는 베이스버전이랑 v2를 순차적으로 적용해주세요.
-아래는 예시입니다.
-```text
-# AI Agent Initialization Script (Example)
+
+### 🤖 AI 에이전트 사용 가이드 (`v3` 단일 규격 적용)
+
+구버전(`AGENT_PROMPT.md`, `AGENT_PROMPT_v2.md`)은 규칙 충돌 방지를 위해 `legacy/`로 격리되었으며, 현재는 **`AGENT_PROMPT_v3.md`**와 **`TDT-Style Agent Screening Prompt_v3.md`**만 단독으로 로드하여 실제 파이썬 도구 호출과 함께 사용합니다.
+
+```python
+# AI Agent Initialization Script (V3 Production)
 def load_agent_core_rules():
-    v1_philosophy = read_file("AGENT_PROMPT.md")
-    v2_execution = read_file("AGENT_PROMPT_v2.md")
+    v3_architecture = read_file("AGENT_PROMPT_v3.md")
+    v3_screening = read_file("TDT-Style Agent Screening Prompt_v3.md")
     
     system_prompt = f"""
-    You are an advanced physics-informed molecular generator agent.
-    [STAGE 1: INTERPRET ARCHITECTURAL CORE]
-    {v1_philosophy}
+    You are the TDT Ultimate Engine v3 hybrid materials informatics agent.
+    [CORE CONSTRAINTS & TRUST REGION PROTOCOL]
+    {v3_architecture}
     
-    [STAGE 2: ENFORCE RUNTIME STRICT CONSTRAINTS]
-    {v2_execution}
+    [5-PHASE SCREENING WORKFLOW]
+    {v3_screening}
     """
     return system_prompt
 ```
+
+
 ---
 ### core.py (legacy/ 버전)
 ```text
