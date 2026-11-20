@@ -1,5 +1,10 @@
 # tdt-calc-engine
 
+### AI의 거짓말(환각)을 최소화 하기 위한 물리 법칙과 수학적 울타리(가드레일)를 설계해 AI를 통제하는 방식을 유도해봤습니다.
+저장소의 `DERIVATION_v2.md`와 파이썬 엔진(tdt_engine/) 및 기타 프로토타입은 독립적인 물리 시뮬레이터가 아니라 AI가 화학/소재 설계 과정에서 환각(Hallucination)을 일으키지 못하도록 묶어두는 '외부 도구 실행(Tool-Use) 기반 물리 가드레일 백엔드 이자 `TDT-Style Agent Screening Prompt_v3.md` 기반 빠른 1차 스크리닝을 위한 도구로 봐주시면 되겠습니다.
+
+이하 물리 가드레일 백앤드의 구조화 방식 및 전개입니다.
+
 > **현행 기준:** `DERIVATION_v2.md` & `tdt_engine/` V3 하이브리드 파이프라인 (`prototypes/test_v25.py` 기반)
 
 생성형 AI의 환각을 실시간으로 억제하는 초고속 1차 가드레일 혹은 물리 기반 잔차 학습(Residual Physics Learning) 파이프라인으로서 실용적인 가치를 검증하는 테스트용 저장소입니다.
